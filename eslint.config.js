@@ -1,11 +1,11 @@
 import js from '@eslint/js'
-import globals from 'globals'
+import prettierConfig from 'eslint-config-prettier'
+import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
-import tseslint from 'typescript-eslint'
 import { globalIgnores } from 'eslint/config'
-import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
-import prettierConfig from 'eslint-config-prettier'
+import globals from 'globals'
+import tseslint from 'typescript-eslint'
 
 export default tseslint.config([
   globalIgnores(['dist']),
@@ -17,18 +17,28 @@ export default tseslint.config([
       js.configs.recommended,
       tseslint.configs.recommended,
       reactHooks.configs['recommended-latest'],
-      reactRefresh.configs.vite,
+      reactRefresh.configs.vite
     ],
+    plugins: ['validate-jsx-nesting'],
     languageOptions: {
       ecmaVersion: 2020,
-      globals: globals.browser,
+      globals: globals.browser
     },
     rules: {
+      'validate-jsx-nesting/no-invalid-jsx-nesting': 'error',
       '@typescript-eslint/sort-type-constituents': 'error',
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        {
+          disallowTypeAnnotations: true,
+          fixStyle: 'separate-type-imports',
+          prefer: 'type-imports'
+        }
+      ],
       'sort-keys': [
         'error',
         'asc',
-        { caseSensitive: true, natural: false, minKeys: 2 },
+        { caseSensitive: true, natural: false, minKeys: 2 }
       ],
       'simple-import-sort/imports': [
         'error',
@@ -46,10 +56,10 @@ export default tseslint.config([
             // 5. style module imports always come last, this helps to avoid CSS order issues
             ['^.+\\.(module.css|module.scss)$'],
             // 6. media imports
-            ['^.+\\.(gif|png|svg|jpg)$'],
-          ],
-        },
-      ],
-    },
-  },
+            ['^.+\\.(gif|png|svg|jpg)$']
+          ]
+        }
+      ]
+    }
+  }
 ])

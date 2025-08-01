@@ -1,0 +1,43 @@
+export const MARGINS = [
+  /**
+   * One inch.
+   */
+  'Standard',
+  /**
+   * Half inch.
+   */
+  'Thin',
+  /**
+   *  Zero inches
+   */
+  'None'
+] as const
+
+export type IPaperFormat = 'Letter'
+export type IMargin = (typeof MARGINS)[number] | number
+
+/**
+ * Common U.S. paper sizes.
+ *
+ * In pixels. Assumes 300 DPI.
+ */
+export type IPaperDimensions = [
+  /**
+   * Width
+   */
+  number,
+  /**
+   * Height
+   */
+  number
+]
+
+export const DEFAULT_MARGIN = 300
+export const PIXEL_TO_INCH = 0.0104166667
+
+export const PAPER_DIMENSIONS: Record<
+  Uppercase<IPaperFormat>,
+  IPaperDimensions
+> = {
+  LETTER: [2551, 3295]
+}
