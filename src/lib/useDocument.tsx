@@ -18,9 +18,9 @@ import {
 import { createDeferred } from './createDeferred'
 import { css } from './css'
 import { Document, type IDocumentProps } from './Document'
-import { drawOcrWord } from './drawOcrWord'
+import { drawOcrWord } from './drawOcrWord.ts'
 import { getDimensions } from './getDimensions.ts'
-import { TEST_TEXT, getOcrHeightStats } from './getOcrHeightStats'
+import { TEST_TEXT } from './getOcrHeightStats'
 import { traverse } from './traverse'
 import { makeStyleProps } from './utils/makeStyleProps.ts'
 
@@ -38,11 +38,9 @@ export const useDocument = ({
   ...props
 }: IUseDocumentOptions = {}) => {
   const ref = useRef<HTMLDivElement>(null)
-
   const [isCreating, setIsCreating] = useState(false)
   const [pdfDataUri, setPdfDataUri] = useState('')
   const [dataUri, setDataUri] = useState('')
-
   const pdf = useRef<jsPDF>(null)
 
   const [WIDTH, HEIGHT] =
@@ -56,19 +54,14 @@ export const useDocument = ({
 
   const width = WIDTH / workspaceSize
   const height = HEIGHT / workspaceSize
-
   const padding =
     (typeof margin === 'number' ? margin : MARGIN_MAP[margin]) / workspaceSize
 
   const pdfDoc = useMemo(() => import('jspdf'), [])
-
-  const htmlToImage = useMemo(() => {
-    return (async () => import('html-to-image'))()
-  }, [])
+  const htmlToImage = useMemo(() => (async () => import('html-to-image'))(), [])
 
   const create = useCallback(async () => {
     setIsCreating(true)
-
     const deferred = createDeferred<{
       error?: unknown | Error | false
       node?: HTMLDivElement
@@ -77,56 +70,42 @@ export const useDocument = ({
     const exec = async () => {
       try {
         const tesseract = import('tesseract.js')
-
         const [{ jsPDF }, { toCanvas }] = await Promise.all([
           pdfDoc,
           htmlToImage
         ])
 
-        const testDoc = new jsPDF('p', 'px', 'letter')
         const doc = new jsPDF('p', 'px', 'letter')
-
         pdf.current = doc
 
         const sheet = new CSSStyleSheet()
         const clonedNode = ref.current?.cloneNode(true) as HTMLDivElement
 
-        const res = css`
-          .pdfize-node {
-            padding: ${padding}px;
-            height: ${height}px;
-            width: ${width}px;
-            margin: 0px;
-            border: none;
-          }
-        `
-
-        sheet.replaceSync(res.replace(/[\s\n]*/gm, ''))
+        sheet.replaceSync(
+          css`
+            .pdfize-node {
+              padding: ${padding}px;
+              height: ${height}px;
+              width: ${width}px;
+              margin: 0px;
+              border: none;
+            }
+          `.replace(/[\s\n]*/gm, '')
+        )
 
         clonedNode.classList.add('pdfize-node')
         document.body.appendChild(clonedNode)
         document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
 
-        const testDiv = document.createElement('div')
-
-        const className = 'ocr-test'
-
-        testDiv.classList.add(className)
-        testDiv.innerHTML = TEST_TEXT
-
-        clonedNode.prepend(testDiv)
-
-        const style = getComputedStyle(
-          clonedNode.querySelector(`.${className}`)!
-        )
-        const knownFontSize = parseFloat(style.fontSize)
-
         const { createWorker } = await tesseract
         const worker = await createWorker('eng')
 
+        await worker.setParameters({
+          preserve_interword_spaces: '0'
+        })
+
         traverse(clonedNode, (node: HTMLElement) => {
           const style = getComputedStyle(node)
-
           const overflow = makeStyleProps([
             'overflow',
             'overflowX',
@@ -135,16 +114,53 @@ export const useDocument = ({
 
           overflow.forEach((property) => {
             const value = style[property]
-
-            if (typeof value !== 'string') return
-
-            if (['scroll', 'auto'].includes(value)) {
+            if (
+              typeof value === 'string' &&
+              ['scroll', 'auto'].includes(value)
+            ) {
               node.style[property] = 'hidden'
             }
           })
         })
 
-        const testCanvas = await toCanvas(clonedNode, {
+        const testNode = clonedNode.cloneNode(true) as HTMLDivElement
+
+        const getCharDimensions = () => {
+          const testDiv = document.createElement('div')
+          const className = 'ocr-test'
+          testDiv.classList.add(className)
+
+          testNode.innerHTML = ''
+          testDiv.style.display = 'flex'
+          testDiv.style.flexDirection = 'row'
+          testDiv.style.gap = '30px'
+          testDiv.style.flexWrap = 'wrap'
+
+          for (const char of TEST_TEXT) {
+            const div = document.createElement('div')
+            div.textContent = char.trim()
+            div.style.backgroundColor = 'white'
+            div.style.fontSize = '20px'
+            div.style.color = 'black'
+            div.style.flex = '0 1 auto'
+            div.style.lineHeight = 'normal'
+            div.style.alignSelf = 'auto'
+            testDiv.appendChild(div)
+          }
+
+          testNode.prepend(testDiv)
+          document.body.appendChild(testNode)
+
+          const style = getComputedStyle(
+            testNode.querySelector(`.${className}`)!
+          )
+
+          return parseFloat(style.fontSize)
+        }
+
+        const knownFontSize = getCharDimensions()
+
+        const testCanvas = await toCanvas(testNode, {
           backgroundColor: 'white',
           quality: 1,
           height,
@@ -154,19 +170,7 @@ export const useDocument = ({
           canvasWidth: width
         })
 
-        console.log({ testCanvas })
-
-        const { average: averageOcrHeight } = await getOcrHeightStats({
-          canvas: testCanvas,
-          worker,
-          testText: TEST_TEXT
-        })
-
-        console.log({ averageOcrHeight })
-
-        clonedNode.removeChild(testDiv)
-
-        if (!ref.current) return {}
+        document.body.removeChild(testNode)
 
         const canvas = await toCanvas(clonedNode, {
           backgroundColor: 'white',
@@ -178,15 +182,32 @@ export const useDocument = ({
           canvasWidth: width
         })
 
-        const dimensions = {
-          width,
-          height,
-          ratio: NaN
-        }
+        const dimensions = { width, height, ratio: NaN }
 
         const { ratio, ...scaled } = autoScale
           ? getDimensions(dimensions, doc.internal.pageSize)
           : dimensions
+
+        const {
+          data: { blocks = [] }
+        } = await worker.recognize(canvas, {}, { blocks: true })
+
+        for (const block of blocks!) {
+          for (const paragraph of block.paragraphs) {
+            for (const line of paragraph.lines) {
+              const { bbox: linebbox } = line
+
+              const height = linebbox.y1 - linebbox.y0
+
+              const multiplier =
+                knownFontSize / ((height * ratio) / workspaceSize)
+
+              const fontSize = (height * ratio * multiplier) / workspaceSize
+
+              drawOcrWord(doc, line, fontSize, workspaceSize, ratio)
+            }
+          }
+        }
 
         doc.addImage({
           imageData: canvas,
@@ -196,70 +217,25 @@ export const useDocument = ({
           ...scaled
         })
 
-        const multiplier =
-          knownFontSize / ((averageOcrHeight * ratio) / workspaceSize)
-
-        const ret = await worker.recognize(
-          canvas,
-          {},
-          {
-            blocks: true
-          }
-        )
-
-        testDoc.text('Test', 20, 20)
-
-        const {
-          data: { blocks = [] }
-        } = await ret
-
-        for (const block of blocks!) {
-          for (const paragraph of block.paragraphs) {
-            for (const line of paragraph.lines) {
-              for (const word of line.words) {
-                const { text, bbox } = word
-
-                const fontSize =
-                  ((bbox.y1 - bbox.y0) * ratio * multiplier) / workspaceSize
-
-                doc.setFontSize(fontSize)
-
-                drawOcrWord(doc, text, bbox, fontSize, workspaceSize, ratio, {
-                  spacing: 'ocr', // 'jsPDF' optional for visual rendering
-                  baselineFactor: 0.25 // tweak for vertical precision
-                })
-              }
-            }
-          }
-        }
-
         setDataUri(canvas.toDataURL())
         setPdfDataUri(doc.output('datauristring'))
 
-        deferred.resolve({
-          error: false,
-          node: clonedNode
-        })
+        deferred.resolve({ error: false, node: clonedNode })
         worker.terminate()
       } catch (error) {
-        deferred.resolve({
-          error
-        })
+        deferred.resolve({ error })
       }
 
       return deferred.promise
     }
 
     const { node } = await exec()
-
     setIsCreating(false)
 
     return () => {
-      if (node) {
-        document.body.removeChild(node)
-      }
+      if (node) document.body.removeChild(node)
     }
-  }, [setPdfDataUri, setDataUri])
+  }, [])
 
   useEffect(() => {
     create()
@@ -277,9 +253,8 @@ export const useDocument = ({
       </object>
     ) : null
 
-  const PreviewImage = () => {
-    return dataUri ? <img style={{ width, height }} src={dataUri} /> : null
-  }
+  const PreviewImage = () =>
+    dataUri ? <img style={{ width, height }} src={dataUri} /> : null
 
   const RefDocument = memo(({ children }: PropsWithChildren) => (
     <Document
@@ -298,7 +273,6 @@ export const useDocument = ({
     create,
     Viewer,
     PreviewImage,
-
     pdf: pdf.current,
     isCreating,
     download: () => pdf.current?.save()

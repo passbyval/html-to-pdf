@@ -1,13 +1,10 @@
 import { type IDocumentProps } from './Document'
 
 export const TEST_TEXT = `
-  AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz
+  ABCDEFGHIJKLMNOPQRSTUVWXYZ
+  abcdefghijklmnopqrstuvwxyz
   0123456789
-  . , ; : ! ? - – — _ ( ) [ ] { }
-  $ € £ ¥ ₩ ₽ ₹ ¢
-  á é í ó ú ñ ü ø å ß æ œ
-  Α Β Γ Δ Ε Ζ Η Θ Ι Κ Λ Μ Ν Ξ Ο Π Ρ Σ Τ Υ Φ Χ Ψ Ω
-  а б в г д е ё ж з и й к л м н о п р с т у ф х ц ч ш щ ъ ы ь э ю я
+  \`~!@#$%^&*()_+-=[]{}\\|;:'\",<.>/?
 `
   .replace(/\s+/g, ' ')
   .trim()
@@ -41,13 +38,16 @@ export const getOcrHeightStats = async ({
 
   const testWords = new Set(
     testText
-      .split(/\s+/)
+      .split('')
       .map((w) => w.trim())
       .filter(Boolean)
   )
 
   const ocrHeights: number[] = []
-  const matchedWords: string[] = []
+  const ocrWidths: number[] = []
+
+  const charHeights: Record<string, number> = {}
+  const charWidths: Record<string, number> = {}
 
   for (const block of blocks ?? []) {
     for (const paragraph of block.paragraphs) {
@@ -55,8 +55,13 @@ export const getOcrHeightStats = async ({
         for (const word of line.words) {
           if (testWords.has(word.text)) {
             const height = word.bbox.y1 - word.bbox.y0
+            const width = word.bbox.x1 - word.bbox.x0
+
             ocrHeights.push(height)
-            matchedWords.push(word.text)
+            ocrWidths.push(width)
+
+            charHeights[word.text] = height
+            charWidths[word.text] = width
           }
         }
       }
@@ -76,6 +81,7 @@ export const getOcrHeightStats = async ({
     min,
     max,
     count: ocrHeights.length,
-    matchedWords
+    charHeights,
+    charWidths
   }
 }

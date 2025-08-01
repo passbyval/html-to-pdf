@@ -71,6 +71,7 @@ function App() {
         <Document>
           <Header>
             <img
+              data-ocr="false"
               src={logo}
               loading="lazy"
               style={{ width: '70px', paddingRight: '15px' }}
