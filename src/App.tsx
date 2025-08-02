@@ -71,8 +71,8 @@ function App() {
         </Button>
       </Box>
       <div className="flex justify-center items-center h-screen w-screen gap-1">
-        <Viewer />
-        {/* <PreviewImage /> */}
+        {/* <Viewer /> */}
+        <PreviewImage />
         <Document>
           <Header>
             <img

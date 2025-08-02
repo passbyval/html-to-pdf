@@ -29,14 +29,24 @@ import { makeStyleProps } from '../utils/makeStyleProps.ts'
 
 export interface IUseDocumentOptions
   extends Partial<Omit<IDocumentProps, 'ref'>> {
-  workspaceSize?: number
+  /**
+   * Default size is set to ANSI Letter at 300dpi which is {@link PAPER_DIMENSIONS.LETTER}.
+   *
+   * This keeps parity between standard margin sizes like one-inch (Standard) and half-inch (Narrow).
+   *
+   * To prevent working with dimensions larger than most monitors, the document is scaled down by this value.
+   *
+   * 3-5 is recommended.
+   */
+  workspaceScale?: number
   autoScale?: boolean
+  autoPaginate?: boolean
 }
 
 export const useDocument = ({
   format = 'Letter',
   margin = DEFAULT_MARGIN,
-  workspaceSize = 5,
+  workspaceScale = 3.5,
   autoScale = true,
   ...props
 }: IUseDocumentOptions = {}) => {
@@ -57,10 +67,10 @@ export const useDocument = ({
     None: 0
   }
 
-  const width = WIDTH / workspaceSize
-  const height = HEIGHT / workspaceSize
+  const width = WIDTH / workspaceScale
+  const height = HEIGHT / workspaceScale
   const padding =
-    (typeof margin === 'number' ? margin : MARGIN_MAP[margin]) / workspaceSize
+    (typeof margin === 'number' ? margin : MARGIN_MAP[margin]) / workspaceScale
 
   const pdfDoc = useMemo(() => import('jspdf'), [])
   const htmlToImage = useMemo(() => (async () => import('html-to-image'))(), [])
@@ -165,7 +175,7 @@ export const useDocument = ({
           quality: 1,
           height,
           width,
-          pixelRatio: workspaceSize,
+          pixelRatio: workspaceScale,
           canvasHeight: height,
           canvasWidth: width
         }
@@ -203,11 +213,11 @@ export const useDocument = ({
                 const height = linebbox.y1 - linebbox.y0
 
                 const multiplier =
-                  knownFontSize / ((height * ratio) / workspaceSize)
+                  knownFontSize / ((height * ratio) / workspaceScale)
 
-                const fontSize = (height * ratio * multiplier) / workspaceSize
+                const fontSize = (height * ratio * multiplier) / workspaceScale
 
-                drawOcrWord(doc, line, fontSize, workspaceSize, ratio)
+                drawOcrWord(doc, line, fontSize, workspaceScale, ratio)
               }
             }
           }
