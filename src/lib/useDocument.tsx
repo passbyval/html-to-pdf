@@ -192,23 +192,28 @@ export const useDocument = ({
           data: { blocks = [] }
         } = await worker.recognize(canvas, {}, { blocks: true })
 
-        for (const block of blocks!) {
-          for (const paragraph of block.paragraphs) {
-            for (const line of paragraph.lines) {
-              const { bbox: linebbox } = line
+        if (blocks) {
+          for (const block of blocks) {
+            for (const paragraph of block.paragraphs) {
+              for (const line of paragraph.lines) {
+                const { bbox: linebbox } = line
 
-              const height = linebbox.y1 - linebbox.y0
+                const height = linebbox.y1 - linebbox.y0
 
-              const multiplier =
-                knownFontSize / ((height * ratio) / workspaceSize)
+                const multiplier =
+                  knownFontSize / ((height * ratio) / workspaceSize)
 
-              const fontSize = (height * ratio * multiplier) / workspaceSize
+                const fontSize = (height * ratio * multiplier) / workspaceSize
 
-              drawOcrWord(doc, line, fontSize, workspaceSize, ratio)
+                drawOcrWord(doc, line, fontSize, workspaceSize, ratio)
+              }
             }
           }
         }
 
+        /**
+         * Add image after OCR, so that OCR text is invisible.
+         */
         doc.addImage({
           imageData: canvas,
           format: 'JPEG',

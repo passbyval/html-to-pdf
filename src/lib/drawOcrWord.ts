@@ -36,7 +36,7 @@ export function drawOcrWord(
     })
 
     if (debug) {
-      doc.setDrawColor(255, 0, 0) // red
+      doc.setDrawColor(255, 0, 0)
       doc.setLineWidth(0.25)
       doc.rect(
         (bbox.x0 * ratio) / workspaceSize,

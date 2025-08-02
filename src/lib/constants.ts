@@ -41,3 +41,12 @@ export const PAPER_DIMENSIONS: Record<
 > = {
   LETTER: [2551, 3295]
 }
+
+export const TEST_TEXT = `
+  ABCDEFGHIJKLMNOPQRSTUVWXYZ
+  abcdefghijklmnopqrstuvwxyz
+  0123456789
+  \`~!@#$%^&*()_+-=[]{}\\|;:'\",<.>/?
+`
+  .replace(/\s+/g, ' ')
+  .trim()
