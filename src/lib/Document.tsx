@@ -1,12 +1,12 @@
 import { Box } from '@/lib/Box'
 import { type PropsWithChildren, type Ref } from 'react'
-import type { PaperFormat } from './constants'
-import { type Margin } from './constants'
+import type { IPaperFormat } from './constants'
+import { type IMargin } from './constants'
 import { SentinelContainer } from './SentinelContainer'
 
 export interface IDocumentProps {
-  format?: PaperFormat
-  margin?: Margin
+  format?: IPaperFormat
+  margin?: IMargin
   ref?: Ref<HTMLDivElement>
   width: number
   height: number

@@ -1,3 +1,5 @@
+import type { WorkerParams } from 'tesseract.js'
+
 export const MARGINS = [
   /**
    * One inch.
@@ -50,3 +52,7 @@ export const TEST_TEXT = `
 `
   .replace(/\s+/g, ' ')
   .trim()
+
+export const OCR_PARAMS: Partial<WorkerParams> = {
+  preserve_interword_spaces: '0'
+}

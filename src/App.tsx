@@ -50,7 +50,7 @@ const data = times<ITableData>(20, () => {
 })
 
 function App() {
-  const { Document, create, Viewer, PreviewImage, download, pdf, isCreating } =
+  const { Document, create, Viewer, PreviewImage, download, isCreating } =
     useDocument()
 
   const onClick = async () => {
@@ -61,7 +61,12 @@ function App() {
   return (
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
       <Box className="absolute" top={25} right={25} zIndex={99}>
-        <Button variant="secondary" onClick={onClick}>
+        <Button
+          style={{ minWidth: 71 }}
+          loading={isCreating}
+          variant="secondary"
+          onClick={onClick}
+        >
           Get
         </Button>
       </Box>

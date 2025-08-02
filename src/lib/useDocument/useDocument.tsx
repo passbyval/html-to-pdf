@@ -9,20 +9,22 @@ import {
   type PropsWithChildren,
   type ReactNode
 } from 'react'
+import type { Worker } from 'tesseract.js'
 import {
   DEFAULT_MARGIN,
+  OCR_PARAMS,
   PAPER_DIMENSIONS,
-  TEST_TEXT,
   type IMargin,
   type IPaperFormat
-} from './constants'
-import { createDeferred } from './createDeferred'
-import { css } from './css'
-import { Document, type IDocumentProps } from './Document'
-import { drawOcrWord } from './drawOcrWord.ts'
-import { getDimensions } from './getDimensions.ts'
-import { traverse } from './traverse'
-import { makeStyleProps } from './utils/makeStyleProps.ts'
+} from '../constants.ts'
+import { createDeferred } from '../createDeferred.ts'
+import { css } from '../css.ts'
+import { Document, type IDocumentProps } from '../Document.tsx'
+import { drawOcrWord } from '../drawOcrWord.ts'
+import { getCharDimensions } from '../getCharDimensions.ts'
+import { getDimensions } from '../getDimensions.ts'
+import { traverse } from '../traverse.ts'
+import { makeStyleProps } from '../utils/makeStyleProps.ts'
 
 export interface IUseDocumentOptions
   extends Partial<Omit<IDocumentProps, 'ref'>> {
@@ -38,6 +40,8 @@ export const useDocument = ({
   ...props
 }: IUseDocumentOptions = {}) => {
   const ref = useRef<HTMLDivElement>(null)
+  const tesseractWorkerRef = useRef<Worker | null>(null)
+
   const [isCreating, setIsCreating] = useState(false)
   const [pdfDataUri, setPdfDataUri] = useState('')
   const [dataUri, setDataUri] = useState('')
@@ -60,17 +64,42 @@ export const useDocument = ({
   const pdfDoc = useMemo(() => import('jspdf'), [])
   const htmlToImage = useMemo(() => (async () => import('html-to-image'))(), [])
 
+  useEffect(() => {
+    const worker = tesseractWorkerRef.current
+
+    return () => {
+      worker?.terminate()
+    }
+  }, [])
+
+  const terminateWorker = async () => {
+    await tesseractWorkerRef?.current?.terminate()
+    tesseractWorkerRef.current = null
+  }
+
+  const getWorker = async (): Promise<Worker> => {
+    if (tesseractWorkerRef.current) return tesseractWorkerRef.current
+
+    const { createWorker } = await import('tesseract.js')
+
+    const worker = await createWorker('eng')
+    await worker.setParameters(OCR_PARAMS)
+
+    tesseractWorkerRef.current = worker
+
+    return worker
+  }
+
   const create = useCallback(async () => {
     setIsCreating(true)
 
-    const deferred = createDeferred<{
-      error?: unknown | Error | false
-      node?: HTMLDivElement
-    }>()
-
     const exec = async () => {
+      const { promise, resolve } = createDeferred<{
+        error?: unknown | Error | false
+        node?: HTMLDivElement
+      }>()
+
       try {
-        const tesseract = import('tesseract.js')
         const [{ jsPDF }, { toCanvas }] = await Promise.all([
           pdfDoc,
           htmlToImage
@@ -82,7 +111,7 @@ export const useDocument = ({
         const sheet = new CSSStyleSheet()
         const clonedNode = ref.current?.cloneNode(true) as HTMLDivElement
 
-        sheet.replaceSync(
+        await sheet.replace(
           css`
             .pdfize-node {
               padding: ${padding}px;
@@ -96,14 +125,13 @@ export const useDocument = ({
 
         clonedNode.classList.add('pdfize-node')
         document.body.appendChild(clonedNode)
-        document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
 
-        const { createWorker } = await tesseract
-        const worker = await createWorker('eng')
+        document.adoptedStyleSheets = [
+          ...Array.from(document.adoptedStyleSheets ?? []),
+          sheet
+        ]
 
-        await worker.setParameters({
-          preserve_interword_spaces: '0'
-        })
+        const worker = await getWorker()
 
         traverse(clonedNode, (node: HTMLElement) => {
           const style = getComputedStyle(node)
@@ -116,6 +144,7 @@ export const useDocument = ({
 
           overflow.forEach((property) => {
             const value = style[property]
+
             if (
               typeof value === 'string' &&
               ['scroll', 'auto'].includes(value)
@@ -126,30 +155,9 @@ export const useDocument = ({
         })
 
         const testNode = clonedNode.cloneNode(true) as HTMLDivElement
+        const knownFontSize = getCharDimensions(testNode)
 
-        const getCharDimensions = () => {
-          const testDiv = document.createElement('div')
-          const className = 'ocr-test'
-
-          testDiv.classList.add(className)
-
-          testNode.innerHTML = TEST_TEXT
-          testDiv.style.display = 'flex'
-          testDiv.style.flexDirection = 'row'
-          testDiv.style.gap = '30px'
-          testDiv.style.flexWrap = 'wrap'
-
-          testNode.prepend(testDiv)
-          document.body.appendChild(testNode)
-
-          const style = getComputedStyle(
-            testNode.querySelector(`.${className}`)!
-          )
-
-          return parseFloat(style.fontSize)
-        }
-
-        const knownFontSize = getCharDimensions()
+        document.body.removeChild(testNode)
 
         const canvas = await toCanvas(clonedNode, {
           backgroundColor: 'white',
@@ -204,25 +212,25 @@ export const useDocument = ({
         setDataUri(canvas.toDataURL())
         setPdfDataUri(doc.output('datauristring'))
 
-        deferred.resolve({ error: false, node: clonedNode })
-        worker.terminate()
+        resolve({ error: false, node: clonedNode })
       } catch (error) {
-        deferred.resolve({ error })
+        resolve({ error })
       }
 
-      return deferred.promise
+      return promise
     }
 
-    const { node } = await exec()
+    const { error, node } = await exec()
+
+    if (error) {
+      throw error
+    }
+
     setIsCreating(false)
 
-    return () => {
-      if (node) document.body.removeChild(node)
+    if (node) {
+      document.body.removeChild(node)
     }
-  }, [])
-
-  useEffect(() => {
-    create()
   }, [])
 
   const Viewer = ({ fallback }: { fallback?: ReactNode }) =>
@@ -257,8 +265,11 @@ export const useDocument = ({
     create,
     Viewer,
     PreviewImage,
-    pdf: pdf.current,
+    get pdf() {
+      return pdf.current
+    },
     isCreating,
-    download: () => pdf.current?.save()
+    download: () => pdf.current?.save(),
+    terminateWorker
   }
 }

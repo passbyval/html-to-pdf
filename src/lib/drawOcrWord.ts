@@ -7,12 +7,11 @@ export function drawOcrWord(
   workspaceSize: number,
   ratio: number,
   options: {
-    widthCorrectionFactor?: number
-    charHeights?: Record<string, number>
-    charWidths?: Record<string, number> // <-- ADD THIS
     debug?: boolean
   } = {}
 ) {
+  if (!line.words) return
+
   const { debug = false } = options
 
   doc.setFontSize(fontSize)
