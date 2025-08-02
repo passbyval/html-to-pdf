@@ -50,12 +50,12 @@ const data = times<ITableData>(25, () => {
 })
 
 function App() {
-  const { Document, create, Viewer, PreviewImage, download, isCreating } =
-    useDocument()
+  const { Document, create, Viewer, PreviewImage, isCreating } = useDocument()
 
   const onClick = async () => {
-    await create()
-    // download()
+    const { download } = await create()
+    console.log({ download })
+    download()
   }
 
   return (

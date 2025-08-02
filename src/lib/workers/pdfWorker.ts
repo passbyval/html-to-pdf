@@ -3,11 +3,20 @@ import { createWorker } from 'tesseract.js'
 import { OCR_PARAMS } from '../constants'
 import { getDimensions } from '../getDimensions'
 import { chain } from '../utils/chain'
+import { drawOcrFromBlocks } from '../utils/drawOcrFromBlocks'
 import type { WorkerInput, WorkerOutput } from './types'
 
 self.onmessage = async (e: MessageEvent<WorkerInput>) => {
   const { bitmaps, options } = e.data
-  const { width, height, workspaceScale, autoScale, autoPaginate } = options
+
+  const {
+    width,
+    height,
+    workspaceScale,
+    autoScale,
+    autoPaginate,
+    knownFontSize
+  } = options
 
   const doc = new jsPDF('p', 'px', 'letter', true)
 
@@ -29,18 +38,17 @@ self.onmessage = async (e: MessageEvent<WorkerInput>) => {
       (b) => new OffscreenCanvas(b.width, b.height)
     )
 
-    const ctx = canvas.getContext('2d')!
+    canvas.getContext('2d')!.drawImage(bitmap[0], 0, 0)
+    ocrCanvas.getContext('2d')!.drawImage(bitmap[1], 0, 0)
 
-    ctx.drawImage(bitmap[0], 0, 0)
-
-    // await drawOcrFromBlocks({
-    //   doc,
-    //   canvas: ocrCanvas,
-    //   knownFontSize: 16,
-    //   ratio,
-    //   worker,
-    //   workspaceScale
-    // })
+    await drawOcrFromBlocks({
+      doc,
+      canvas: ocrCanvas,
+      knownFontSize,
+      ratio,
+      worker,
+      workspaceScale
+    })
 
     const [, imageData] = await chain(
       async () => canvas.convertToBlob({ type: 'image/jpeg' }),
@@ -56,8 +64,6 @@ self.onmessage = async (e: MessageEvent<WorkerInput>) => {
       height: (canvas.height / workspaceScale) * ratio
     })
   }
-
-  doc.save()
 
   await worker.terminate()
 

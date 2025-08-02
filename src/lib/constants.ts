@@ -34,13 +34,14 @@ export type IPaperDimensions = [
   number
 ]
 
-export const DEFAULT_MARGIN = 85.71428571
+export const DEFAULT_MARGIN = 300
+export const PIXEL_TO_INCH = 0.0104166667
 
 export const PAPER_DIMENSIONS: Record<
   Uppercase<IPaperFormat>,
   IPaperDimensions
 > = {
-  LETTER: [728.85714286, 941.42857143]
+  LETTER: [2551, 3295]
 }
 
 export const TEST_TEXT = `

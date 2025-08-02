@@ -6,7 +6,9 @@ export interface WorkerOptions
       IUseDocumentOptions,
       'workspaceScale' | 'autoScale' | 'autoPaginate'
     >,
-    Pick<IDocumentProps, 'width' | 'height'> {}
+    Pick<IDocumentProps, 'width' | 'height'> {
+  knownFontSize: number
+}
 
 export interface WorkerInput {
   bitmaps: [ImageBitmap, ImageBitmap][]
