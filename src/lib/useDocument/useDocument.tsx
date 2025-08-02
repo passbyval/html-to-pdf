@@ -21,22 +21,24 @@ import {
 import { createDeferred } from '../createDeferred.ts'
 import { css } from '../css.ts'
 import { Document, type IDocumentProps } from '../Document.tsx'
-import { drawOcrWord } from '../drawOcrWord.ts'
 import { getCharDimensions } from '../getCharDimensions.ts'
 import { getDimensions } from '../getDimensions.ts'
 import { traverse } from '../traverse.ts'
+import { chain } from '../utils/chain.ts'
+import { cropCanvas } from '../utils/cropCanvas.ts'
 import { makeStyleProps } from '../utils/makeStyleProps.ts'
+import { range } from '../utils/range.ts'
+import PdfWorker from '../workers/pdfWorker?worker'
+import type { WorkerInput, WorkerOutput } from '../workers/types.ts'
 
 export interface IUseDocumentOptions
   extends Partial<Omit<IDocumentProps, 'ref'>> {
   /**
-   * Default size is set to ANSI Letter at 300dpi which is {@link PAPER_DIMENSIONS.LETTER}.
+   * A scaling factor applied to the document to reduce its on-screen size.
    *
-   * This keeps parity between standard margin sizes like one-inch (Standard) and half-inch (Narrow).
+   * By default, the document is scaled down from 300 DPI ANSI Letter size
+   * using a factor of 3.5 to ensure it fits within typical screen resolutions.
    *
-   * To prevent working with dimensions larger than most monitors, the document is scaled down by this value.
-   *
-   * 3-5 is recommended.
    */
   workspaceScale?: number
   autoScale?: boolean
@@ -46,8 +48,9 @@ export interface IUseDocumentOptions
 export const useDocument = ({
   format = 'Letter',
   margin = DEFAULT_MARGIN,
-  workspaceScale = 3.5,
+  workspaceScale = 1,
   autoScale = true,
+  autoPaginate = true,
   ...props
 }: IUseDocumentOptions = {}) => {
   const ref = useRef<HTMLDivElement>(null)
@@ -69,6 +72,7 @@ export const useDocument = ({
 
   const width = WIDTH / workspaceScale
   const height = HEIGHT / workspaceScale
+
   const padding =
     (typeof margin === 'number' ? margin : MARGIN_MAP[margin]) / workspaceScale
 
@@ -93,8 +97,10 @@ export const useDocument = ({
 
     const { createWorker } = await import('tesseract.js')
 
-    const worker = await createWorker('eng')
-    await worker.setParameters(OCR_PARAMS)
+    const [worker] = await chain(
+      async () => createWorker('eng'),
+      async (worker) => worker.setParameters(OCR_PARAMS)
+    )
 
     tesseractWorkerRef.current = worker
 
@@ -105,157 +111,201 @@ export const useDocument = ({
     setIsCreating(true)
 
     const exec = async () => {
-      const { promise, resolve } = createDeferred<{
-        error?: unknown | Error | false
-        node?: HTMLDivElement
-      }>()
+      if (!ref.current) return Promise.resolve(void 0)
 
-      try {
-        const [{ jsPDF }, { toCanvas }] = await Promise.all([
-          pdfDoc,
-          htmlToImage
-        ])
+      const pdfWorker = new PdfWorker()
 
-        const doc = new jsPDF('p', 'px', 'letter')
-        pdf.current = doc
+      const { promise, resolve } = createDeferred<HTMLDivElement | void>()
 
-        const sheet = new CSSStyleSheet()
-        const clonedNode = ref.current?.cloneNode(true) as HTMLDivElement
+      const { jsPDF } = await pdfDoc
 
-        await sheet.replace(
-          css`
-            .pdfize-node {
-              padding: ${padding}px;
-              height: ${height}px;
-              width: ${width}px;
-              margin: 0px;
-              border: none;
-            }
-          `.replace(/[\s\n]*/gm, '')
-        )
+      const doc = new jsPDF('p', 'px', 'letter', true)
+      pdf.current = doc
 
-        clonedNode.classList.add('pdfize-node')
-        document.body.appendChild(clonedNode)
+      const sheet = new CSSStyleSheet()
+      const clonedNode = ref.current?.cloneNode(true) as HTMLDivElement
 
-        document.adoptedStyleSheets = [
-          ...Array.from(document.adoptedStyleSheets ?? []),
-          sheet
-        ]
+      const { scrollHeight } = ref.current
+      const trueHeight = Math.max(height, scrollHeight)
 
-        const worker = await getWorker()
+      await sheet.replace(
+        css`
+          .pdfize-node {
+            padding: ${padding}px;
+            min-height: ${trueHeight}px;
+            width: ${width}px;
+            margin: 0px;
+            border: none;
+            overflow: visible;
+          }
+        `.replace(/[\s\n]*/gm, '')
+      )
 
-        traverse(clonedNode, (node: HTMLElement) => {
-          const style = getComputedStyle(node)
+      clonedNode.classList.add('pdfize-node')
+      document.body.appendChild(clonedNode)
 
-          const overflow = makeStyleProps([
-            'overflow',
-            'overflowX',
-            'overflowY'
-          ])
+      document.adoptedStyleSheets = [
+        ...Array.from(document.adoptedStyleSheets ?? []),
+        sheet
+      ]
 
-          overflow.forEach((property) => {
-            const value = style[property]
+      const worker = await getWorker()
 
-            if (
-              typeof value === 'string' &&
-              ['scroll', 'auto'].includes(value)
-            ) {
-              node.style[property] = 'hidden'
-            }
-          })
-        })
+      traverse(clonedNode, (node: HTMLElement) => {
+        const style = getComputedStyle(node)
 
-        const testNode = clonedNode.cloneNode(true) as HTMLDivElement
-        const knownFontSize = getCharDimensions(testNode)
+        const overflow = makeStyleProps(['overflow', 'overflowX', 'overflowY'])
 
-        document.body.removeChild(testNode)
+        overflow.forEach((property) => {
+          const value = style[property]
 
-        const TO_CANVAS_OPTIONS: Options = {
-          backgroundColor: 'white',
-          quality: 1,
-          height,
-          width,
-          pixelRatio: workspaceScale,
-          canvasHeight: height,
-          canvasWidth: width
-        }
-
-        const canvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
-
-        clonedNode.querySelectorAll("[data-ocr='false']")?.forEach((node) => {
-          if (node instanceof HTMLElement) {
-            node.style.opacity = '0'
+          if (typeof value === 'string' && ['scroll', 'auto'].includes(value)) {
+            node.style[property] = 'hidden'
           }
         })
+      })
 
-        const ocrCanvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
+      const testNode = clonedNode.cloneNode(true) as HTMLDivElement
+      const knownFontSize = getCharDimensions(testNode)
 
-        document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
-          (s) => s !== sheet
-        )
+      document.body.removeChild(testNode)
 
-        const dimensions = { width, height, ratio: NaN }
-
-        const { ratio, ...scaled } = autoScale
-          ? getDimensions(dimensions, doc.internal.pageSize)
-          : dimensions
-
-        const {
-          data: { blocks = [] }
-        } = await worker.recognize(ocrCanvas, {}, { blocks: true })
-
-        if (blocks) {
-          for (const block of blocks) {
-            for (const paragraph of block.paragraphs) {
-              for (const line of paragraph.lines) {
-                const { bbox: linebbox } = line
-
-                const height = linebbox.y1 - linebbox.y0
-
-                const multiplier =
-                  knownFontSize / ((height * ratio) / workspaceScale)
-
-                const fontSize = (height * ratio * multiplier) / workspaceScale
-
-                drawOcrWord(doc, line, fontSize, workspaceScale, ratio)
-              }
-            }
-          }
-        }
-
-        /**
-         * Add image after OCR, so that OCR text is invisible.
-         */
-        doc.addImage({
-          imageData: canvas,
-          format: 'JPEG',
-          x: 0,
-          y: 0,
-          ...scaled
-        })
-
-        setDataUri(canvas.toDataURL())
-        setPdfDataUri(doc.output('datauristring'))
-
-        resolve({ error: false, node: clonedNode })
-      } catch (error) {
-        resolve({ error })
+      const TO_CANVAS_OPTIONS: Options = {
+        backgroundColor: 'white',
+        quality: 1,
+        pixelRatio: workspaceScale,
+        width,
+        canvasWidth: width
       }
+
+      const { toCanvas } = await htmlToImage
+
+      const canvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
+
+      setDataUri(canvas.toDataURL())
+
+      clonedNode.querySelectorAll("[data-ocr='false']")?.forEach((node) => {
+        if (node instanceof HTMLElement) {
+          node.style.opacity = '0'
+        }
+      })
+
+      document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+        (s) => s !== sheet
+      )
+
+      const dimensions = { width, height, ratio: NaN }
+
+      const { ratio, ...scaled } = autoScale
+        ? getDimensions(dimensions, doc.internal.pageSize)
+        : dimensions
+
+      // drawOcrFromBlocks({
+      //   ...drawOcrArgs,
+      //   canvas: cropped[1]
+      // })
+
+      // doc.addImage({
+      //   imageData: cropped[0],
+      //   format: 'JPEG',
+      //   x: 0,
+      //   y: 0,
+      //   ...scaled
+      // })
+
+      async function getPaginatedCanvases(
+        canvas: HTMLCanvasElement,
+        node: HTMLElement
+      ): Promise<[HTMLCanvasElement, HTMLCanvasElement][]> {
+        const pageHeightPx = height * workspaceScale
+        const pageCount = Math.ceil(canvas.height / pageHeightPx)
+
+        return await Promise.all(
+          range(pageCount).map(
+            async (page): Promise<[HTMLCanvasElement, HTMLCanvasElement]> => {
+              const offsetY = page * pageHeightPx
+
+              const heightForPage = Math.min(
+                pageHeightPx,
+                canvas.height - offsetY
+              )
+
+              const freshClone = await toCanvas(node, TO_CANVAS_OPTIONS)
+
+              return cropCanvas(
+                [canvas, freshClone],
+                offsetY,
+                heightForPage
+              ) as [HTMLCanvasElement, HTMLCanvasElement]
+            }
+          )
+        )
+      }
+
+      const cropped = await getPaginatedCanvases(canvas, clonedNode)
+
+      cropped[0][1].toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob)
+          window.open(url, '_blank')
+        }
+      })
+
+      const bitmaps: [ImageBitmap, ImageBitmap][] = await Promise.all(
+        cropped.map(async ([a, b]) => {
+          const [bmpA, bmpB] = await Promise.all([
+            createImageBitmap(a),
+            createImageBitmap(b)
+          ])
+          return [bmpA, bmpB] as const
+        })
+      )
+
+      const input: WorkerInput = {
+        bitmaps,
+        options: {
+          width,
+          height,
+          workspaceScale,
+          autoScale,
+          autoPaginate
+        }
+      }
+
+      pdfWorker.postMessage(input)
+
+      pdfWorker.onmessage = (e: MessageEvent<WorkerOutput>) => {
+        const { pdfBlob } = e.data
+
+        // const anchor = document.createElement('a')
+        // const url = URL.createObjectURL(pdfBlob)
+
+        // anchor.href = url
+        // anchor.click()
+
+        setIsCreating(false)
+        pdfWorker.terminate()
+      }
+
+      setDataUri(canvas.toDataURL())
+      setPdfDataUri(doc.output('datauristring'))
+
+      // doc.save()
+
+      resolve(clonedNode)
 
       return promise
     }
 
-    const { error, node } = await exec()
-
-    if (error) {
-      throw error
-    }
+    const node = await exec()
 
     setIsCreating(false)
 
-    if (node) {
-      document.body.removeChild(node)
-    }
+    if (node) document.body.removeChild(node)
+  }, [])
+
+  useEffect(() => {
+    create()
   }, [])
 
   const Viewer = ({ fallback }: { fallback?: ReactNode }) =>

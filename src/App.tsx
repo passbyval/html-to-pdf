@@ -36,7 +36,7 @@ const {
   currencySymbol
 } = faker.finance
 
-const data = times<ITableData>(20, () => {
+const data = times<ITableData>(25, () => {
   const res = Object.entries({
     amount,
     accountNumber,
@@ -72,7 +72,7 @@ function App() {
       </Box>
       <div className="flex justify-center items-center h-screen w-screen gap-1">
         {/* <Viewer /> */}
-        <PreviewImage />
+        {/* <PreviewImage /> */}
         <Document>
           <Header>
             <img

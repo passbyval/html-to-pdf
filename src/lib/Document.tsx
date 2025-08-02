@@ -2,7 +2,6 @@ import { Box } from '@/lib/Box'
 import { type PropsWithChildren, type Ref } from 'react'
 import type { IPaperFormat } from './constants'
 import { type IMargin } from './constants'
-import { SentinelContainer } from './SentinelContainer'
 
 export interface IDocumentProps {
   format?: IPaperFormat
@@ -20,7 +19,7 @@ export function Document({
   ref
 }: PropsWithChildren<IDocumentProps>) {
   return (
-    <SentinelContainer
+    <Box
       style={{
         backgroundColor: 'white',
         width,
@@ -29,9 +28,10 @@ export function Document({
         overflowY: 'scroll',
         overflowX: 'hidden'
       }}
+      ref={ref}
     >
-      <Box ref={ref}>{children}</Box>
-    </SentinelContainer>
+      {children}
+    </Box>
   )
 }
 
