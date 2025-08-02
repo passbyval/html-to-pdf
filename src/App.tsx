@@ -55,7 +55,7 @@ function App() {
 
   const onClick = async () => {
     await create()
-    download()
+    // download()
   }
 
   return (

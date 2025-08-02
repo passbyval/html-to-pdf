@@ -1,3 +1,4 @@
+import type { Options } from 'html-to-image/lib/types'
 import type jsPDF from 'jspdf'
 import {
   memo,
@@ -159,7 +160,7 @@ export const useDocument = ({
 
         document.body.removeChild(testNode)
 
-        const canvas = await toCanvas(clonedNode, {
+        const TO_CANVAS_OPTIONS: Options = {
           backgroundColor: 'white',
           quality: 1,
           height,
@@ -167,7 +168,21 @@ export const useDocument = ({
           pixelRatio: workspaceSize,
           canvasHeight: height,
           canvasWidth: width
+        }
+
+        const canvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
+
+        clonedNode.querySelectorAll("[data-ocr='false']")?.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            node.style.opacity = '0'
+          }
         })
+
+        const ocrCanvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
+
+        document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+          (s) => s !== sheet
+        )
 
         const dimensions = { width, height, ratio: NaN }
 
@@ -177,7 +192,7 @@ export const useDocument = ({
 
         const {
           data: { blocks = [] }
-        } = await worker.recognize(canvas, {}, { blocks: true })
+        } = await worker.recognize(ocrCanvas, {}, { blocks: true })
 
         if (blocks) {
           for (const block of blocks) {
