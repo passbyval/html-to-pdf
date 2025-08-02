@@ -12,6 +12,7 @@ import {
 import {
   DEFAULT_MARGIN,
   PAPER_DIMENSIONS,
+  TEST_TEXT,
   type IMargin,
   type IPaperFormat
 } from './constants'
@@ -20,7 +21,6 @@ import { css } from './css'
 import { Document, type IDocumentProps } from './Document'
 import { drawOcrWord } from './drawOcrWord.ts'
 import { getDimensions } from './getDimensions.ts'
-import { TEST_TEXT } from './getOcrHeightStats'
 import { traverse } from './traverse'
 import { makeStyleProps } from './utils/makeStyleProps.ts'
 
@@ -62,6 +62,7 @@ export const useDocument = ({
 
   const create = useCallback(async () => {
     setIsCreating(true)
+
     const deferred = createDeferred<{
       error?: unknown | Error | false
       node?: HTMLDivElement
@@ -106,6 +107,7 @@ export const useDocument = ({
 
         traverse(clonedNode, (node: HTMLElement) => {
           const style = getComputedStyle(node)
+
           const overflow = makeStyleProps([
             'overflow',
             'overflowX',
@@ -128,25 +130,14 @@ export const useDocument = ({
         const getCharDimensions = () => {
           const testDiv = document.createElement('div')
           const className = 'ocr-test'
+
           testDiv.classList.add(className)
 
-          testNode.innerHTML = ''
+          testNode.innerHTML = TEST_TEXT
           testDiv.style.display = 'flex'
           testDiv.style.flexDirection = 'row'
           testDiv.style.gap = '30px'
           testDiv.style.flexWrap = 'wrap'
-
-          for (const char of TEST_TEXT) {
-            const div = document.createElement('div')
-            div.textContent = char.trim()
-            div.style.backgroundColor = 'white'
-            div.style.fontSize = '20px'
-            div.style.color = 'black'
-            div.style.flex = '0 1 auto'
-            div.style.lineHeight = 'normal'
-            div.style.alignSelf = 'auto'
-            testDiv.appendChild(div)
-          }
 
           testNode.prepend(testDiv)
           document.body.appendChild(testNode)
@@ -159,18 +150,6 @@ export const useDocument = ({
         }
 
         const knownFontSize = getCharDimensions()
-
-        const testCanvas = await toCanvas(testNode, {
-          backgroundColor: 'white',
-          quality: 1,
-          height,
-          width,
-          pixelRatio: workspaceSize,
-          canvasHeight: height,
-          canvasWidth: width
-        })
-
-        document.body.removeChild(testNode)
 
         const canvas = await toCanvas(clonedNode, {
           backgroundColor: 'white',

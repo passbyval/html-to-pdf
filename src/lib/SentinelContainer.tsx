@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type PropsWithChildren } from 'react'
 import { Box } from './Box'
-import { useSentinel } from './useSentinel'
+import { useSentinel } from './hooks/useSentinel'
 
 export const SentinelContainer = ({
   children,
