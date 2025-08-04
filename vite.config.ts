@@ -13,5 +13,8 @@ export default defineConfig({
   },
   build: {
     ssr: true
+  },
+  worker: {
+    format: 'es'
   }
 })

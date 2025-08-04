@@ -64,6 +64,26 @@ vi.mock('./drawOcrWord.ts', async () => ({
   drawOcrWord: vi.fn()
 }))
 
+vi.mock('../workers/pdfWorker.ts?worker', () => {
+  class MockPdfWorker {
+    onmessage: ((event: MessageEvent) => void) | null = null
+    postMessage() {
+      setTimeout(() => {
+        this.onmessage?.({
+          data: {
+            pdfBlob: new Blob(['mock-pdf'], { type: 'application/pdf' })
+          }
+        } as MessageEvent)
+      }, 10)
+    }
+    terminate() {}
+  }
+
+  return {
+    default: vi.fn(() => new MockPdfWorker())
+  }
+})
+
 const wrapper = ({ children }: PropsWithChildren) => (
   <div ref={() => {}}>{children}</div>
 )

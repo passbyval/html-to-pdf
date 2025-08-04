@@ -21,7 +21,7 @@ import { cropCanvas } from '../utils/cropCanvas.ts'
 import { makeStyleProps } from '../utils/makeStyleProps.ts'
 import { range } from '../utils/range.ts'
 import PdfWorker from '../workers/pdfWorker.ts?worker'
-import type { WorkerInput, WorkerOutput } from '../workers/types.ts'
+import type { PdfWorkerInput, PdfWorkerOutput } from '../workers/types.ts'
 
 export interface IUseDocumentOptions
   extends Partial<Omit<IDocumentProps, 'ref'>> {
@@ -29,12 +29,15 @@ export interface IUseDocumentOptions
    * A scaling factor applied to the document to reduce its on-screen size.
    *
    * By default, the document is scaled down from 300 DPI ANSI Letter size
-   * using a factor of 3.5 to ensure it fits within typical screen resolutions.
+   * using a factor of 3.5 so it fits within typical screen resolutions.
+   *
+   * Higher default resolutions ensures that the final PDF is crisp.
    *
    */
   workspaceScale?: number
   autoScale?: boolean
   autoPaginate?: boolean
+  debug?: boolean
 }
 
 export const useDocument = ({
@@ -43,12 +46,23 @@ export const useDocument = ({
   workspaceScale = 3.5,
   autoScale = true,
   autoPaginate = true,
+  debug = false,
   ...props
 }: IUseDocumentOptions = {}) => {
   const ref = useRef<HTMLDivElement>(null)
 
   const [isCreating, setIsCreating] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [dataUri, setDataUri] = useState('')
+
+  const updateProgress = (progress: number) => {
+    setProgress((prev) => {
+      const total = progress * (100 - prev) + prev
+      const rounded = Math.round(total * 100) / 100
+
+      return Math.min(100, rounded)
+    })
+  }
 
   const [WIDTH, HEIGHT] =
     PAPER_DIMENSIONS[format?.toUpperCase() as Uppercase<IPaperFormat>]
@@ -68,16 +82,17 @@ export const useDocument = ({
   const htmlToImage = useMemo(() => (async () => import('html-to-image'))(), [])
 
   const create = (): Promise<{ download: () => void }> => {
+    setIsCreating(true)
+    setProgress(1)
+
     return new Promise(async (resolve) => {
       if (!ref.current) {
         return Promise.resolve({ download: () => void 0 })
       }
 
-      setIsCreating(true)
-
       const pdfWorker = new PdfWorker()
-
       const sheet = new CSSStyleSheet()
+
       const clonedNode = ref.current?.cloneNode(true) as HTMLDivElement
 
       const { scrollHeight } = ref.current
@@ -92,6 +107,14 @@ export const useDocument = ({
             margin: 0px;
             border: none;
             overflow: visible;
+            font-smooth: antialiased;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            transform: translateZ(0);
+            will-change: transform;
+            backface-visibility: hidden;
+            text-rendering: optimizeLegibility;
+            image-rendering: crisp-edges;
           }
         `.replace(/[\s\n]*/gm, '')
       )
@@ -107,6 +130,15 @@ export const useDocument = ({
       traverse(clonedNode, (node: HTMLElement) => {
         const style = getComputedStyle(node)
 
+        const layoutAffectors = makeStyleProps([
+          'left',
+          'top',
+          'width',
+          'height',
+          'fontSize',
+          'lineHeight'
+        ])
+
         const overflow = makeStyleProps(['overflow', 'overflowX', 'overflowY'])
 
         overflow.forEach((property) => {
@@ -114,6 +146,15 @@ export const useDocument = ({
 
           if (typeof value === 'string' && ['scroll', 'auto'].includes(value)) {
             node.style[property] = 'hidden'
+          }
+        })
+
+        layoutAffectors.forEach((property) => {
+          const value = style[property]
+          const num = parseFloat(value)
+
+          if (!isNaN(num)) {
+            node.style.setProperty(property, `${Math.round(num)}px`)
           }
         })
       })
@@ -143,55 +184,106 @@ export const useDocument = ({
         }
       })
 
+      const ocrCanvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
+
       document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
         (s) => s !== sheet
       )
 
-      async function getPaginatedCanvases(
+      function findVisualPageBreaks(
         canvas: HTMLCanvasElement,
-        node: HTMLElement
+        pageHeight: number,
+        tolerance = 5
+      ): number[] {
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return []
+
+        const { width, height } = canvas
+        const imageData = ctx.getImageData(0, 0, width, height).data
+
+        const isRowMostlyWhite = (y: number): boolean =>
+          range(width).reduce((count, x) => {
+            const pixelIndex = (y * width + x) * 4
+
+            const [r, g, b] = [
+              imageData[pixelIndex],
+              imageData[pixelIndex + 1],
+              imageData[pixelIndex + 2]
+            ]
+
+            const isDarkPixel = r + g + b < 700
+
+            return isDarkPixel ? count + 1 : count
+          }, 0) <= tolerance
+
+        const [result] = range(height).reduce<[number[], number]>(
+          ([breaks, lastBreak], y) => {
+            const isNewBreak =
+              y >= pageHeight &&
+              y - lastBreak >= pageHeight &&
+              isRowMostlyWhite(y)
+
+            return isNewBreak ? [[...breaks, y], y] : [breaks, lastBreak]
+          },
+          [[], 0]
+        )
+
+        if (debug) {
+          const lineWidth = 3
+          ctx.strokeStyle = 'red'
+          ctx.lineWidth = lineWidth
+
+          result.forEach((y) => {
+            const adjustedY = y + lineWidth / 2
+            ctx.beginPath()
+            ctx.moveTo(0, adjustedY)
+            ctx.lineTo(width, adjustedY)
+            ctx.stroke()
+          })
+        }
+
+        return result
+      }
+
+      async function getPaginatedCanvases(
+        canvas: HTMLCanvasElement
       ): Promise<[HTMLCanvasElement, HTMLCanvasElement][]> {
         const pageHeightPx = height * workspaceScale
-        const pageCount = Math.ceil(canvas.height / pageHeightPx)
+        const safeBreaks = findVisualPageBreaks(canvas, pageHeightPx)
 
-        const ocrCanvas = await toCanvas(node, TO_CANVAS_OPTIONS)
+        const offsets = [0, ...safeBreaks, canvas.height]
 
         return await Promise.all(
-          range(pageCount).map(
-            async (page): Promise<[HTMLCanvasElement, HTMLCanvasElement]> => {
-              const offsetY = page * pageHeightPx
-              const heightForPage = Math.min(
-                pageHeightPx,
-                canvas.height - offsetY
-              )
-
-              return cropCanvas(
+          range(offsets.length - 1).map(
+            (i) =>
+              cropCanvas(
                 [canvas, ocrCanvas],
-                offsetY,
-                heightForPage
+                offsets[i],
+                offsets[i + 1] - offsets[i]
               ) as [HTMLCanvasElement, HTMLCanvasElement]
-            }
           )
         )
       }
 
-      const cropped = await getPaginatedCanvases(canvas, clonedNode)
+      const cropped = await getPaginatedCanvases(canvas)
 
       const bitmaps: [ImageBitmap, ImageBitmap][] = await Promise.all(
         cropped.map(async ([a, b]) => {
           const [bmpA, bmpB] = await Promise.all([
-            createImageBitmap(a),
-            createImageBitmap(b)
+            createImageBitmap(a, { resizeQuality: 'high' }),
+            createImageBitmap(b, { resizeQuality: 'high' })
           ])
           return [bmpA, bmpB] as const
         })
       )
 
-      const input: WorkerInput = {
+      document.body.removeChild(clonedNode)
+
+      const input: PdfWorkerInput = {
         bitmaps,
         options: {
-          width,
           height,
+          width,
           workspaceScale,
           autoScale,
           autoPaginate,
@@ -199,35 +291,60 @@ export const useDocument = ({
         }
       }
 
+      setProgress(10)
+
       pdfWorker.postMessage(input)
 
-      pdfWorker.onmessage = (e: MessageEvent<WorkerOutput>) => {
-        const { pdfBlob } = e.data
+      pdfWorker.onmessage = (e: MessageEvent<PdfWorkerOutput>) => {
+        const {
+          type,
+          message,
+          pageIndex = 0,
+          totalPages = 0,
+          pdfBuffer
+        } = e.data
 
-        console.log({
-          pdfBlob
-        })
-
-        const download = () => {
-          console.log('downloading!')
-          const anchor = document.createElement('a')
-          const url = URL.createObjectURL(pdfBlob)
-
-          anchor.href = url
-          anchor.click()
+        if (type === 'progress') {
+          updateProgress(pageIndex / totalPages)
+          if (debug)
+            console.debug(`Rendering page ${pageIndex} of ${totalPages}`)
         }
 
-        resolve({
-          download
-        })
+        if (type === 'done') {
+          pdfWorker.terminate()
+          setIsCreating(false)
+          setProgress(0)
 
-        setIsCreating(false)
-        pdfWorker.terminate()
+          resolve({
+            download: () => {
+              const blob = new Blob([pdfBuffer!], { type: 'application/pdf' })
+
+              const url = URL.createObjectURL(blob)
+              const anchor = document.createElement('a')
+
+              anchor.setAttribute('href', url)
+              anchor.setAttribute('target', '_blank')
+              anchor.setAttribute('rel', 'noopener noreferrer')
+              anchor.setAttribute('download', 'document.pdf')
+
+              // anchor.click()
+              window.open(url, '_blank')
+
+              URL.revokeObjectURL(url)
+            }
+          })
+        }
+
+        if (type === 'error') {
+          setIsCreating(false)
+          setProgress(0)
+          console.error('Worker error:', message)
+        }
       }
-
-      document.body.removeChild(clonedNode)
     })
   }
+
+  let pdfDataUri = ''
 
   const Viewer = ({ fallback }: { fallback?: ReactNode }) =>
     pdfDataUri ? (
@@ -261,6 +378,7 @@ export const useDocument = ({
     create,
     Viewer,
     PreviewImage,
-    isCreating
+    isCreating,
+    progress
   }
 }

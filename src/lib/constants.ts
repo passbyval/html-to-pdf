@@ -35,7 +35,6 @@ export type IPaperDimensions = [
 ]
 
 export const DEFAULT_MARGIN = 300
-export const PIXEL_TO_INCH = 0.0104166667
 
 export const PAPER_DIMENSIONS: Record<
   Uppercase<IPaperFormat>,
@@ -55,4 +54,9 @@ export const TEST_TEXT = `
 
 export const OCR_PARAMS: Partial<WorkerParams> = {
   preserve_interword_spaces: '0'
+}
+
+export const CANVAS_CONTEXT_OPTIONS = {
+  antialias: true,
+  desynchronized: true
 }

@@ -1,20 +1,25 @@
-import type { IDocumentProps } from '../Document'
 import type { IUseDocumentOptions } from '../useDocument/types'
 
-export interface WorkerOptions
+export interface PdfWorkerOptions
   extends Pick<
-      IUseDocumentOptions,
-      'workspaceScale' | 'autoScale' | 'autoPaginate'
-    >,
-    Pick<IDocumentProps, 'width' | 'height'> {
+    IUseDocumentOptions,
+    'workspaceScale' | 'autoScale' | 'autoPaginate'
+  > {
   knownFontSize: number
+  width: number
+  height: number
 }
 
-export interface WorkerInput {
-  bitmaps: [ImageBitmap, ImageBitmap][]
-  options: Required<WorkerOptions>
+export interface PdfWorkerInput {
+  bitmaps: (readonly [ImageBitmap, ImageBitmap])[]
+  options: Required<PdfWorkerOptions>
+  action?: 'terminate'
 }
 
-export interface WorkerOutput {
-  pdfBlob: Blob
+export interface PdfWorkerOutput {
+  type: 'progress' | 'done' | 'error'
+  pdfBuffer?: ArrayBuffer
+  pageIndex?: number
+  totalPages?: number
+  message?: string
 }

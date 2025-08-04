@@ -1,5 +1,3 @@
-import type { ImageOptions } from 'jspdf'
-
 export const getDimensions = <T extends { width: number; height: number }>(
   dimensions: T,
   {
@@ -8,18 +6,26 @@ export const getDimensions = <T extends { width: number; height: number }>(
   }: {
     width: number
     height: number
-  }
-): Pick<ImageOptions, 'width' | 'height'> & { ratio: number } => {
-  const widthRatio = pageWidth / dimensions.width
-  const heightRatio = pageHeight / dimensions.height
-  const ratio = widthRatio > heightRatio ? heightRatio : widthRatio
+  },
+  scaleFactor = 1
+) => {
+  const scaledWidth = dimensions.width / scaleFactor
+  const scaledHeight = dimensions.height / scaleFactor
 
-  const width = dimensions.width * ratio
-  const height = dimensions.height * ratio
+  const inputAspect = scaledWidth / scaledHeight
+  const pageAspect = pageWidth / pageHeight
+
+  if (inputAspect > pageAspect) {
+    return {
+      width: pageWidth,
+      height: pageWidth / inputAspect,
+      ratio: pageWidth / scaledWidth
+    }
+  }
 
   return {
-    width,
-    height,
-    ratio
+    width: pageHeight * inputAspect,
+    height: pageHeight,
+    ratio: pageHeight / scaledHeight
   }
 }

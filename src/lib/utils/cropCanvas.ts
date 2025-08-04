@@ -5,7 +5,12 @@ export function cropCanvas(
 ): HTMLCanvasElement[] {
   return sourceCanvases.map((canvas) => {
     const cv = document.createElement('canvas')
-    const ctx = cv.getContext('2d')!
+
+    const ctx = cv.getContext('2d', {
+      desynchronized: true,
+      willReadFrequently: true,
+      colorType: 'float16'
+    })!
 
     cv.style.paddingTop = '20px'
 
