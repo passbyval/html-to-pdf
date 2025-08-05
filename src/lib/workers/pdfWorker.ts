@@ -96,12 +96,7 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
   const [canvas] = transferBitmapToCanvas(bitmap)
   const [ocrCanvas] = transferBitmapToCanvas(ocrBitmap)
 
-  const cropped = await getPaginatedCanvases(
-    canvas,
-    ocrCanvas,
-    pageHeightPx,
-    doc.internal.pageSize
-  )
+  const cropped = await getPaginatedCanvases(canvas, ocrCanvas, pageHeightPx)
 
   const { length: totalPages } = cropped
 
@@ -124,6 +119,14 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
       async (blob) => blobToDataURL(blob)
     )
 
+    await drawOcrFromBlocks({
+      doc: page,
+      canvas: ocrCanvas,
+      ratio,
+      knownFontSize,
+      worker: await workerPromise
+    })
+
     page.addImage({
       imageData,
       format: 'JPEG',
@@ -131,14 +134,6 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
       y: 0,
       height: doc.internal.pageSize.height,
       width: doc.internal.pageSize.width
-    })
-
-    await drawOcrFromBlocks({
-      doc: page,
-      canvas: ocrCanvas,
-      ratio,
-      knownFontSize,
-      worker: await workerPromise
     })
 
     const result: PdfWorkerOutput = {
