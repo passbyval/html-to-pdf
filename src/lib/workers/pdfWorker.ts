@@ -3,10 +3,9 @@ import { createWorker } from 'tesseract.js'
 import { OCR_PARAMS } from '../constants'
 import { getDimensions } from '../getDimensions'
 import { chain } from '../utils/chain'
+import { cropCanvas } from '../utils/cropCanvas'
 import { drawOcrFromBlocks } from '../utils/drawOcrFromBlocks'
 import type { PdfWorkerInput, PdfWorkerOutput } from './types'
-
-const UPSCALE = self.devicePixelRatio || 2
 
 const workerPromise = (async () => {
   const [worker] = await chain(
@@ -52,6 +51,25 @@ function transferBitmapToCanvas(
   return [canvas, ctx] as const
 }
 
+export async function getPaginatedCanvases(
+  canvas: OffscreenCanvas,
+  ocrCanvas: OffscreenCanvas,
+  pageHeight: number
+): Promise<[OffscreenCanvas, OffscreenCanvas][]> {
+  const pageCount = Math.ceil(canvas.height / pageHeight)
+
+  return await Promise.all(
+    Array.from({ length: pageCount }, (_, i) => {
+      const y = i * pageHeight
+
+      return cropCanvas([canvas, ocrCanvas], y, pageHeight) as [
+        OffscreenCanvas,
+        OffscreenCanvas
+      ]
+    })
+  )
+}
+
 self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
   if (e.data.action === 'terminate') {
     const worker = await workerPromise
@@ -59,41 +77,61 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
     return
   }
 
-  const { bitmaps, options } = e.data
-  const { width, height, autoScale, autoPaginate, knownFontSize } = options
+  const { options } = e.data
+
+  const {
+    width,
+    bitmap,
+    ocrBitmap,
+    height,
+    autoScale,
+    autoPaginate,
+    knownFontSize,
+    workspaceScale
+  } = options
 
   const doc = new jsPDF('p', 'px', [width, height], true)
+  const pageHeightPx = height * workspaceScale
 
-  const bitmapsCopy = autoPaginate ? [...bitmaps] : bitmaps.slice(0, 1)
-  const totalPages = bitmapsCopy.length
+  const [canvas] = transferBitmapToCanvas(bitmap)
+  const [ocrCanvas] = transferBitmapToCanvas(ocrBitmap)
 
-  for await (const [index, bitmap] of bitmapsCopy.entries()) {
+  const cropped = await getPaginatedCanvases(
+    canvas,
+    ocrCanvas,
+    pageHeightPx,
+    doc.internal.pageSize
+  )
+
+  const { length: totalPages } = cropped
+
+  for await (const [index, [canvas, ocrCanvas]] of cropped.entries()) {
     const page = index === 0 ? doc : doc.addPage()
 
-    const [mainBitmap, ocrBitmap] = bitmap
-
-    const [canvas] = transferBitmapToCanvas(
-      mainBitmap,
-      mainBitmap.width * UPSCALE,
-      mainBitmap.height * UPSCALE
-    )
-
-    const [ocrCanvas] = transferBitmapToCanvas(ocrBitmap)
-
     const dimensions = {
-      width: canvas.width / UPSCALE,
-      height: canvas.height / UPSCALE,
-      ratio: NaN
+      width: canvas.width,
+      height: canvas.height
     }
 
-    const { ratio, ...scaled } = autoScale
+    console.log('loop', canvas.height)
+
+    const { ratio } = autoScale
       ? getDimensions(dimensions, doc.internal.pageSize)
-      : dimensions
+      : { ratio: 1 }
 
     const [, imageData] = await chain(
       async () => canvas.convertToBlob({ type: 'image/jpeg', quality: 1 }),
       async (blob) => blobToDataURL(blob)
     )
+
+    page.addImage({
+      imageData,
+      format: 'JPEG',
+      x: 0,
+      y: 0,
+      height: doc.internal.pageSize.height,
+      width: doc.internal.pageSize.width
+    })
 
     await drawOcrFromBlocks({
       doc: page,
@@ -101,15 +139,6 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
       ratio,
       knownFontSize,
       worker: await workerPromise
-    })
-
-    page.addImage({
-      imageData,
-      format: 'JPEG',
-      x: 0,
-      y: 0,
-      ...scaled,
-      width: doc.internal.pageSize.width
     })
 
     const result: PdfWorkerOutput = {

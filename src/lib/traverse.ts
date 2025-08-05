@@ -1,23 +1,19 @@
 /**
- * Recursively iterate through a DOM tree.
+ * Traverse the DOM tree using TreeWalker and yield each HTMLElement.
  */
-export const traverse = <T extends Element | Node | ChildNode>(
-  node: T,
-  callback: <H extends HTMLElement>(node: H) => void
-) => {
-  if (node instanceof HTMLElement) {
-    callback(node)
+export function* traverse(root: Node): Generator<HTMLElement> {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
+    acceptNode: (node) =>
+      node instanceof HTMLElement
+        ? NodeFilter.FILTER_ACCEPT
+        : NodeFilter.FILTER_SKIP
+  })
+
+  if (root instanceof HTMLElement) {
+    yield root
   }
 
-  if (node.hasChildNodes()) {
-    for (const childNode of Array.from(node.childNodes)) {
-      if ('style' in node) {
-        traverse(childNode, (child) => {
-          if (child instanceof HTMLElement) {
-            callback(child)
-          }
-        })
-      }
-    }
+  for (let current = walker.nextNode(); current; current = walker.nextNode()) {
+    yield current as HTMLElement
   }
 }

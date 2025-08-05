@@ -17,9 +17,7 @@ import { css } from '../css.ts'
 import { Document, type IDocumentProps } from '../Document.tsx'
 import { getCharDimensions } from '../getCharDimensions.ts'
 import { traverse } from '../traverse.ts'
-import { cropCanvas } from '../utils/cropCanvas.ts'
 import { makeStyleProps } from '../utils/makeStyleProps.ts'
-import { range } from '../utils/range.ts'
 import PdfWorker from '../workers/pdfWorker.ts?worker'
 import type { PdfWorkerInput, PdfWorkerOutput } from '../workers/types.ts'
 
@@ -127,7 +125,7 @@ export const useDocument = ({
         sheet
       ]
 
-      traverse(clonedNode, (node: HTMLElement) => {
+      for (const node of traverse(clonedNode)) {
         const style = getComputedStyle(node)
 
         const layoutAffectors = makeStyleProps([
@@ -157,7 +155,7 @@ export const useDocument = ({
             node.style.setProperty(property, `${Math.round(num)}px`)
           }
         })
-      })
+      }
 
       const testNode = clonedNode.cloneNode(true) as HTMLDivElement
       const knownFontSize = getCharDimensions(testNode)
@@ -190,101 +188,30 @@ export const useDocument = ({
         (s) => s !== sheet
       )
 
-      function findVisualPageBreaks(
-        canvas: HTMLCanvasElement,
-        pageHeight: number,
-        tolerance = 5
-      ): number[] {
-        const ctx = canvas.getContext('2d')
-        if (!ctx) return []
+      // const cropped = await getPaginatedCanvases(canvas)
 
-        const { width, height } = canvas
-        const imageData = ctx.getImageData(0, 0, width, height).data
-
-        const isRowMostlyWhite = (y: number): boolean =>
-          range(width).reduce((count, x) => {
-            const pixelIndex = (y * width + x) * 4
-
-            const [r, g, b] = [
-              imageData[pixelIndex],
-              imageData[pixelIndex + 1],
-              imageData[pixelIndex + 2]
-            ]
-
-            const isDarkPixel = r + g + b < 700
-
-            return isDarkPixel ? count + 1 : count
-          }, 0) <= tolerance
-
-        const [result] = range(height).reduce<[number[], number]>(
-          ([breaks, lastBreak], y) => {
-            const isNewBreak =
-              y >= pageHeight &&
-              y - lastBreak >= pageHeight &&
-              isRowMostlyWhite(y)
-
-            return isNewBreak ? [[...breaks, y], y] : [breaks, lastBreak]
-          },
-          [[], 0]
-        )
-
-        if (debug) {
-          const lineWidth = 3
-          ctx.strokeStyle = 'red'
-          ctx.lineWidth = lineWidth
-
-          result.forEach((y) => {
-            const adjustedY = y + lineWidth / 2
-            ctx.beginPath()
-            ctx.moveTo(0, adjustedY)
-            ctx.lineTo(width, adjustedY)
-            ctx.stroke()
-          })
-        }
-
-        return result
-      }
-
-      async function getPaginatedCanvases(
-        canvas: HTMLCanvasElement
-      ): Promise<[HTMLCanvasElement, HTMLCanvasElement][]> {
-        const pageHeightPx = height * workspaceScale
-        const safeBreaks = findVisualPageBreaks(canvas, pageHeightPx)
-
-        const offsets = [0, ...safeBreaks, canvas.height]
-
-        return await Promise.all(
-          range(offsets.length - 1).map(
-            (i) =>
-              cropCanvas(
-                [canvas, ocrCanvas],
-                offsets[i],
-                offsets[i + 1] - offsets[i]
-              ) as [HTMLCanvasElement, HTMLCanvasElement]
-          )
-        )
-      }
-
-      const cropped = await getPaginatedCanvases(canvas)
-
-      const bitmaps: [ImageBitmap, ImageBitmap][] = await Promise.all(
-        cropped.map(async ([a, b]) => {
-          const [bmpA, bmpB] = await Promise.all([
-            createImageBitmap(a, { resizeQuality: 'high' }),
-            createImageBitmap(b, { resizeQuality: 'high' })
-          ])
-          return [bmpA, bmpB] as const
-        })
-      )
+      // const bitmaps: [ImageBitmap, ImageBitmap][] = await Promise.all(
+      //   cropped.map(async ([a, b]) => {
+      //     const [bmpA, bmpB] = await Promise.all([
+      //       createImageBitmap(a, { resizeQuality: 'high' }),
+      //       createImageBitmap(b, { resizeQuality: 'high' })
+      //     ])
+      //     return [bmpA, bmpB] as const
+      //   })
+      // )
 
       document.body.removeChild(clonedNode)
 
       const input: PdfWorkerInput = {
-        bitmaps,
         options: {
           height,
           width,
+          bitmap: await createImageBitmap(canvas, { resizeQuality: 'high' }),
+          ocrBitmap: await createImageBitmap(ocrCanvas, {
+            resizeQuality: 'high'
+          }),
           workspaceScale,
+          totalHeight: trueHeight,
           autoScale,
           autoPaginate,
           knownFontSize

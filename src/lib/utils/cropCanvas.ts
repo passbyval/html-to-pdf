@@ -1,10 +1,10 @@
 export function cropCanvas(
-  sourceCanvases: HTMLCanvasElement[],
+  sourceCanvases: OffscreenCanvas[],
   y: number,
   height: number
-): HTMLCanvasElement[] {
+): OffscreenCanvas[] {
   return sourceCanvases.map((canvas) => {
-    const cv = document.createElement('canvas')
+    const cv = new OffscreenCanvas(canvas.width, height)
 
     const ctx = cv.getContext('2d', {
       desynchronized: true,
@@ -12,21 +12,23 @@ export function cropCanvas(
       colorType: 'float16'
     })!
 
-    cv.style.paddingTop = '20px'
+    // Fill the background with white
+    ctx.fillStyle = 'white'
+    ctx.fillRect(0, 0, cv.width, cv.height)
 
-    cv.width = canvas.width
-    cv.height = height
+    const drawableHeight = Math.min(height, canvas.height - y)
 
+    // ✅ Draw into full-height canvas without stretching
     ctx.drawImage(
       canvas,
       0,
       y,
       canvas.width,
-      height,
+      drawableHeight, // source rect
       0,
       0,
       canvas.width,
-      height
+      drawableHeight // destination rect: top-aligned
     )
 
     return cv

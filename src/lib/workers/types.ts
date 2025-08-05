@@ -8,10 +8,12 @@ export interface PdfWorkerOptions
   knownFontSize: number
   width: number
   height: number
+  bitmap: ImageBitmap
+  ocrBitmap: ImageBitmap
+  totalHeight: number
 }
 
 export interface PdfWorkerInput {
-  bitmaps: (readonly [ImageBitmap, ImageBitmap])[]
   options: Required<PdfWorkerOptions>
   action?: 'terminate'
 }
