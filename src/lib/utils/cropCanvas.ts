@@ -1,10 +1,25 @@
 export function cropCanvas(
   sourceCanvases: OffscreenCanvas[],
-  y: number,
-  height: number
+  {
+    y,
+    height,
+    margin,
+    isFirstPage,
+    pageHeight
+  }: {
+    y: number
+    height: number
+    margin: number
+    isFirstPage: boolean
+    pageHeight: number
+  }
 ): OffscreenCanvas[] {
+  const topMargin = isFirstPage ? 0 : margin
+  const bottomMargin = margin
+  const drawOffsetY = topMargin
+
   return sourceCanvases.map((canvas) => {
-    const cv = new OffscreenCanvas(canvas.width, height)
+    const cv = new OffscreenCanvas(canvas.width, pageHeight)
 
     const ctx = cv.getContext('2d', {
       desynchronized: true,
@@ -12,13 +27,12 @@ export function cropCanvas(
       colorType: 'float16'
     })!
 
-    // Fill the background with white
+    // Fill with white background
     ctx.fillStyle = 'white'
     ctx.fillRect(0, 0, cv.width, cv.height)
 
     const drawableHeight = Math.min(height, canvas.height - y)
 
-    // ✅ Draw into full-height canvas without stretching
     ctx.drawImage(
       canvas,
       0,
@@ -26,9 +40,9 @@ export function cropCanvas(
       canvas.width,
       drawableHeight, // source rect
       0,
-      0,
+      drawOffsetY,
       canvas.width,
-      drawableHeight // destination rect: top-aligned
+      drawableHeight // dest rect, vertically offset by topMargin
     )
 
     return cv

@@ -84,14 +84,8 @@ function App() {
               data-ocr="false"
               src={logo}
               loading="lazy"
-              style={{ width: '70px', paddingRight: '15px' }}
+              style={{ width: '300px', paddingRight: '15px' }}
             />
-            <h1
-              suppressHydrationWarning
-              className="scroll-m-20 text-3xl font-extrabold tracking-tight text-balance"
-            >
-              {companyName}
-            </h1>
           </Header>
           <Table className="overflow-hidden">
             <TableCaption>A list of your recent invoices.</TableCaption>

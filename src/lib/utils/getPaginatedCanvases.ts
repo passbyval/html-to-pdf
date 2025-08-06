@@ -4,18 +4,33 @@ import { range } from './range'
 export async function getPaginatedCanvases(
   canvas: OffscreenCanvas,
   ocrCanvas: OffscreenCanvas,
-  pageHeight: number
+  pageHeight: number,
+  margin: number
 ): Promise<[OffscreenCanvas, OffscreenCanvas][]> {
-  const pageCount = Math.ceil(canvas.height / pageHeight)
+  const totalHeight = canvas.height
 
-  return await Promise.all(
-    range(pageCount).map((_, i) => {
-      const y = i * pageHeight
+  const firstPageHeight = pageHeight - margin
+  const subsequentPageHeight = pageHeight - margin * 2
+  const remainingHeight = totalHeight - firstPageHeight
 
-      return cropCanvas([canvas, ocrCanvas], y, pageHeight) as [
-        OffscreenCanvas,
-        OffscreenCanvas
-      ]
+  const pageCount =
+    1 + Math.max(0, Math.ceil(remainingHeight / subsequentPageHeight))
+
+  return Promise.all(
+    range(pageCount).map((index) => {
+      const isFirstPage = index === 0
+
+      const y = isFirstPage
+        ? 0
+        : firstPageHeight + (index - 1) * subsequentPageHeight
+
+      return cropCanvas([canvas, ocrCanvas], {
+        y,
+        height: isFirstPage ? firstPageHeight : subsequentPageHeight,
+        margin,
+        isFirstPage,
+        pageHeight
+      }) as [OffscreenCanvas, OffscreenCanvas]
     })
   )
 }

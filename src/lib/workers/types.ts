@@ -1,13 +1,14 @@
 import type { IUseDocumentOptions } from '../useDocument/types'
 
 export interface PdfWorkerOptions
-  extends Pick<IUseDocumentOptions, 'workspaceScale' | 'autoPaginate'> {
+  extends Pick<IUseDocumentOptions, 'autoPaginate' | 'workspaceScale'> {
   knownFontSize: number
   width: number
   height: number
+  margin: number
   bitmap: ImageBitmap
   ocrBitmap: ImageBitmap
-  totalHeight: number
+  pageHeight: number
 }
 
 export interface PdfWorkerInput {

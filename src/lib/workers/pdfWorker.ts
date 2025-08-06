@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf'
+import jsPDF, { type ImageFormat } from 'jspdf'
 import { createWorker } from 'tesseract.js'
 import { OCR_PARAMS } from '../constants'
 import { blobToDataURL } from '../utils/blobToDataURL'
@@ -9,6 +9,13 @@ import { getPaginatedCanvases } from '../utils/getPaginatedCanvases'
 import { transferBitmapToCanvas } from '../utils/transferBitmapToCanvas'
 
 import { type PdfWorkerInput, type PdfWorkerOutput, Progress } from './types'
+
+const imageFormat: ImageFormat = 'JPEG'
+
+const CONVERT_TO_BLOB_OPTIONS = {
+  type: `image/${imageFormat.toLowerCase()}`,
+  quality: 1
+}
 
 const workerPromise = (async () => {
   const [worker] = await chain(
@@ -31,21 +38,28 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
 
   const {
     width,
+    height,
+    margin,
     bitmap,
     ocrBitmap,
-    height,
     autoPaginate,
     knownFontSize,
+    pageHeight,
     workspaceScale
   } = options
 
   const doc = new jsPDF('p', 'px', [width, height], true)
-  const totalHeight = height * workspaceScale
 
   const [canvas] = transferBitmapToCanvas(bitmap)
   const [ocrCanvas] = transferBitmapToCanvas(ocrBitmap)
 
-  const cropped = await getPaginatedCanvases(canvas, ocrCanvas, totalHeight)
+  const cropped = await getPaginatedCanvases(
+    canvas,
+    ocrCanvas,
+    pageHeight,
+    margin * workspaceScale
+  )
+
   const withPagination = autoPaginate ? cropped : [cropped[0]]
 
   const durations: number[] = []
@@ -55,7 +69,7 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
     const page = index === 0 ? doc : doc.addPage()
 
     const [, imageData] = await chain(
-      () => canvas.convertToBlob({ type: 'image/jpeg', quality: 1 }),
+      () => canvas.convertToBlob(CONVERT_TO_BLOB_OPTIONS),
       blobToDataURL
     )
 
@@ -72,12 +86,24 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
 
     page.addImage({
       imageData,
-      format: 'JPEG',
+      format: imageFormat,
       x: 0,
       y: 0,
       width,
       height
     })
+
+    page.setTextColor('#999')
+
+    page.text(
+      `${page.getCurrentPageInfo().pageNumber}`,
+      width - margin / 2,
+      height - margin / 2,
+      {
+        align: 'center',
+        baseline: 'middle'
+      }
+    )
 
     const end = performance.now()
     const durationMs = end - start

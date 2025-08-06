@@ -55,6 +55,7 @@ export const useDocument = ({
   const [isCreating, setIsCreating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [dataUri, setDataUri] = useState('')
+  const [pdfDataUri, setPdfDataUri] = useState('')
 
   const updateProgress = (progress: number) => {
     const percent = Math.round(progress * 10000) / 100
@@ -170,7 +171,7 @@ export const useDocument = ({
       }
 
       const [{ toCanvas }, canvas] = await chain(
-        async () => await htmlToImage,
+        async () => htmlToImage,
         async ({ toCanvas }) => toCanvas(clonedNode, TO_CANVAS_OPTIONS),
         (canvas) => setDataUri(canvas.toDataURL())
       )
@@ -201,10 +202,11 @@ export const useDocument = ({
         options: {
           height,
           width,
+          margin: padding,
+          pageHeight: height * workspaceScale,
+          workspaceScale,
           bitmap,
           ocrBitmap,
-          workspaceScale,
-          totalHeight: trueHeight,
           autoPaginate,
           knownFontSize
         }
@@ -241,7 +243,7 @@ export const useDocument = ({
               attrs.forEach(([key, value]) => anchor.setAttribute(key, value))
 
               // anchor.click()
-              window.open(url, '_blank')
+              // window.open(url, '_blank')
 
               URL.revokeObjectURL(url)
             }
@@ -256,8 +258,6 @@ export const useDocument = ({
       }
     })
   }
-
-  let pdfDataUri = ''
 
   const Viewer = ({ fallback }: { fallback?: ReactNode }) =>
     pdfDataUri ? (
