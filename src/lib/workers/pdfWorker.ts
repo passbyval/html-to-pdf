@@ -12,21 +12,22 @@ import { type PdfWorkerInput, type PdfWorkerOutput, Progress } from './types'
 
 const workerPromise = (async () => {
   const [worker] = await chain(
-    async () => createWorker('eng'),
-    async (worker) => worker.setParameters(OCR_PARAMS)
+    () => createWorker('eng'),
+    (worker) => worker.setParameters(OCR_PARAMS)
   )
 
   return worker
 })()
 
-self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
-  if (e.data.action === 'terminate') {
-    const worker = await workerPromise
-    await worker.terminate()
-    return
-  }
+self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
+  const { action, options } = data
 
-  const { options } = e.data
+  if (action === 'terminate') {
+    return chain(
+      async () => await workerPromise,
+      (worker) => worker.terminate()
+    )
+  }
 
   const {
     width,
