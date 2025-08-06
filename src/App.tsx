@@ -10,13 +10,13 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table'
-import { times } from '@/lib/utils'
 import { faker } from '@faker-js/faker'
 import { type ComponentProps, type PropsWithChildren } from 'react'
 import { AnimatedPercentage } from './components/AnimatedPercentage'
 import { Button } from './components/ui/button'
-import { Box } from './lib/Box'
+import { Box } from './lib/components/Box'
 import { useDocument } from './lib/useDocument'
+import { times } from './utils/times'
 
 interface ITableData {
   accountNumber: string

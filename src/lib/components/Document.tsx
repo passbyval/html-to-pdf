@@ -1,7 +1,7 @@
-import { Box } from '@/lib/Box'
+import { Box } from '@/lib/components/Box'
 import { type PropsWithChildren, type Ref } from 'react'
-import type { IPaperFormat } from './constants'
-import { type IMargin } from './constants'
+import type { IPaperFormat } from '../constants'
+import { type IMargin } from '../constants'
 
 export interface IDocumentProps {
   format?: IPaperFormat

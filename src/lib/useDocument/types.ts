@@ -1,4 +1,4 @@
-import type { IDocumentProps } from '../Document'
+import type { IDocumentProps } from '../components/Document'
 
 export interface IUseDocumentOptions
   extends Partial<Omit<IDocumentProps, 'ref'>> {
@@ -10,6 +10,5 @@ export interface IUseDocumentOptions
    *
    */
   workspaceScale?: number
-  autoScale?: boolean
   autoPaginate?: boolean
 }

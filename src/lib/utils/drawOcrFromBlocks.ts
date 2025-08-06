@@ -1,6 +1,6 @@
 import type jsPDF from 'jspdf'
 import type { Line, RecognizeResult } from 'tesseract.js'
-import { drawOcrWord } from '../drawOcrWord'
+import { drawOcrWord } from '../utils/drawOcrWord'
 
 export async function drawOcrFromBlocks({
   doc,

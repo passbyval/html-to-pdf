@@ -1,4 +1,4 @@
-import { Box, type IBoxProps } from '@/lib/Box'
+import { Box, type IBoxProps } from '@/lib/components/Box'
 
 import type { PropsWithChildren } from 'react'
 

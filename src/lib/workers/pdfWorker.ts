@@ -1,10 +1,13 @@
 import jsPDF from 'jspdf'
 import { createWorker } from 'tesseract.js'
 import { OCR_PARAMS } from '../constants'
-import { getDimensions } from '../getDimensions'
+import { blobToDataURL } from '../utils/blobToDataURL'
 import { chain } from '../utils/chain'
-import { cropCanvas } from '../utils/cropCanvas'
 import { drawOcrFromBlocks } from '../utils/drawOcrFromBlocks'
+import { getDimensions } from '../utils/getDimensions'
+import { getPaginatedCanvases } from '../utils/getPaginatedCanvases'
+import { transferBitmapToCanvas } from '../utils/transferBitmapToCanvas'
+
 import type { PdfWorkerInput, PdfWorkerOutput } from './types'
 
 const workerPromise = (async () => {
@@ -15,60 +18,6 @@ const workerPromise = (async () => {
 
   return worker
 })()
-
-async function blobToDataURL(blob: Blob): Promise<string> {
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader()
-
-    reader.onloadend = () => {
-      if (typeof reader.result === 'string') {
-        resolve(reader.result)
-      } else {
-        reject(new Error('Failed to convert Blob to Data URL'))
-      }
-    }
-
-    reader.onerror = () => reject(reader.error)
-
-    reader.readAsDataURL(blob)
-  })
-}
-
-function transferBitmapToCanvas(
-  bitmap: ImageBitmap,
-  width = bitmap.width,
-  height = bitmap.height
-) {
-  const canvas = new OffscreenCanvas(width, height)
-  const ctx = canvas.getContext('bitmaprenderer') ?? canvas.getContext('2d')
-
-  if (ctx instanceof ImageBitmapRenderingContext) {
-    ctx?.transferFromImageBitmap(bitmap)
-  } else {
-    ctx?.drawImage(bitmap, 0, 0)
-  }
-
-  return [canvas, ctx] as const
-}
-
-export async function getPaginatedCanvases(
-  canvas: OffscreenCanvas,
-  ocrCanvas: OffscreenCanvas,
-  pageHeight: number
-): Promise<[OffscreenCanvas, OffscreenCanvas][]> {
-  const pageCount = Math.ceil(canvas.height / pageHeight)
-
-  return await Promise.all(
-    Array.from({ length: pageCount }, (_, i) => {
-      const y = i * pageHeight
-
-      return cropCanvas([canvas, ocrCanvas], y, pageHeight) as [
-        OffscreenCanvas,
-        OffscreenCanvas
-      ]
-    })
-  )
-}
 
 self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
   if (e.data.action === 'terminate') {
@@ -84,40 +33,32 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
     bitmap,
     ocrBitmap,
     height,
-    autoScale,
     autoPaginate,
     knownFontSize,
     workspaceScale
   } = options
 
   const doc = new jsPDF('p', 'px', [width, height], true)
-  const pageHeightPx = height * workspaceScale
+  const totalHeight = height * workspaceScale
 
   const [canvas] = transferBitmapToCanvas(bitmap)
   const [ocrCanvas] = transferBitmapToCanvas(ocrBitmap)
 
-  const cropped = await getPaginatedCanvases(canvas, ocrCanvas, pageHeightPx)
+  const cropped = await getPaginatedCanvases(canvas, ocrCanvas, totalHeight)
+  const withPagination = autoPaginate ? cropped : [cropped[0]]
 
-  const { length: totalPages } = cropped
+  const durations: number[] = []
 
-  for await (const [index, [canvas, ocrCanvas]] of cropped.entries()) {
+  for await (const [index, [canvas, ocrCanvas]] of withPagination.entries()) {
+    const start = performance.now()
     const page = index === 0 ? doc : doc.addPage()
 
-    const dimensions = {
-      width: canvas.width,
-      height: canvas.height
-    }
-
-    console.log('loop', canvas.height)
-
-    const { ratio } = autoScale
-      ? getDimensions(dimensions, doc.internal.pageSize)
-      : { ratio: 1 }
-
-    const [, imageData] = await chain(
-      async () => canvas.convertToBlob({ type: 'image/jpeg', quality: 1 }),
-      async (blob) => blobToDataURL(blob)
+    const [, dataURL] = await chain(
+      () => canvas.convertToBlob({ type: 'image/jpeg', quality: 1 }),
+      blobToDataURL
     )
+
+    const { ratio } = getDimensions(canvas, doc.internal.pageSize)
 
     await drawOcrFromBlocks({
       doc: page,
@@ -128,7 +69,7 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
     })
 
     page.addImage({
-      imageData,
+      imageData: dataURL,
       format: 'JPEG',
       x: 0,
       y: 0,
@@ -136,13 +77,27 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
       width: doc.internal.pageSize.width
     })
 
-    const result: PdfWorkerOutput = {
+    const end = performance.now()
+    const durationMs = end - start
+
+    durations.push(durationMs)
+
+    const pageNumber = index + 1
+    const avgMs = durations.reduce((a, b) => a + b, 0) / durations.length
+    const totalPages = withPagination.length
+    const pagesRemaining = totalPages - (index + 1)
+
+    const message: PdfWorkerOutput = {
       type: 'progress',
-      pageIndex: index + 1,
-      totalPages
+      pageNumber,
+      totalPages,
+      progress: (index + 1) / totalPages,
+      durationMs,
+      eta: avgMs * pagesRemaining,
+      totalEstimatedTime: avgMs * totalPages
     }
 
-    postMessage(result)
+    postMessage(message)
   }
 
   const buffer = doc.output('arraybuffer')

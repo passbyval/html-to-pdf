@@ -1,4 +1,4 @@
-import { TEST_TEXT } from './constants'
+import { TEST_TEXT } from '../constants'
 
 export const getCharDimensions = (node: HTMLElement) => {
   const testDiv = document.createElement('div')

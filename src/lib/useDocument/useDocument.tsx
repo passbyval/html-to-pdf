@@ -7,17 +7,18 @@ import {
   type PropsWithChildren,
   type ReactNode
 } from 'react'
+import { Document, type IDocumentProps } from '../components/Document.tsx'
 import {
   DEFAULT_MARGIN,
   PAPER_DIMENSIONS,
   type IMargin,
   type IPaperFormat
 } from '../constants.ts'
-import { css } from '../css.ts'
-import { Document, type IDocumentProps } from '../Document.tsx'
-import { getCharDimensions } from '../getCharDimensions.ts'
-import { traverse } from '../traverse.ts'
+import { chain } from '../utils/chain.ts'
+import { css } from '../utils/css.ts'
+import { getCharDimensions } from '../utils/getCharDimensions.ts'
 import { makeStyleProps } from '../utils/makeStyleProps.ts'
+import { traverse } from '../utils/traverse.ts'
 import PdfWorker from '../workers/pdfWorker.ts?worker'
 import type { PdfWorkerInput, PdfWorkerOutput } from '../workers/types.ts'
 
@@ -33,7 +34,6 @@ export interface IUseDocumentOptions
    *
    */
   workspaceScale?: number
-  autoScale?: boolean
   autoPaginate?: boolean
   debug?: boolean
 }
@@ -42,7 +42,6 @@ export const useDocument = ({
   format = 'Letter',
   margin = DEFAULT_MARGIN,
   workspaceScale = 3.5,
-  autoScale = true,
   autoPaginate = true,
   debug = false,
   ...props
@@ -54,12 +53,8 @@ export const useDocument = ({
   const [dataUri, setDataUri] = useState('')
 
   const updateProgress = (progress: number) => {
-    setProgress((prev) => {
-      const total = progress * (100 - prev) + prev
-      const rounded = Math.round(total * 100) / 100
-
-      return Math.min(100, rounded)
-    })
+    const percent = Math.round(progress * 10000) / 100
+    setProgress(Math.min(100, percent))
   }
 
   const [WIDTH, HEIGHT] =
@@ -81,7 +76,7 @@ export const useDocument = ({
 
   const create = (): Promise<{ download: () => void }> => {
     setIsCreating(true)
-    setProgress(1)
+    setProgress(0)
 
     return new Promise(async (resolve) => {
       if (!ref.current) {
@@ -170,11 +165,11 @@ export const useDocument = ({
         canvasWidth: width
       }
 
-      const { toCanvas } = await htmlToImage
-
-      const canvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
-
-      setDataUri(canvas.toDataURL())
+      const [{ toCanvas }, canvas] = await chain(
+        async () => await htmlToImage,
+        async ({ toCanvas }) => toCanvas(clonedNode, TO_CANVAS_OPTIONS),
+        (canvas) => setDataUri(canvas.toDataURL())
+      )
 
       clonedNode.querySelectorAll("[data-ocr='false']")?.forEach((node) => {
         if (node instanceof HTMLElement) {
@@ -188,59 +183,42 @@ export const useDocument = ({
         (s) => s !== sheet
       )
 
-      // const cropped = await getPaginatedCanvases(canvas)
-
-      // const bitmaps: [ImageBitmap, ImageBitmap][] = await Promise.all(
-      //   cropped.map(async ([a, b]) => {
-      //     const [bmpA, bmpB] = await Promise.all([
-      //       createImageBitmap(a, { resizeQuality: 'high' }),
-      //       createImageBitmap(b, { resizeQuality: 'high' })
-      //     ])
-      //     return [bmpA, bmpB] as const
-      //   })
-      // )
-
       document.body.removeChild(clonedNode)
+
+      const [bitmap, ocrBitmap] = await Promise.all(
+        [canvas, ocrCanvas].map((c) =>
+          createImageBitmap(c, {
+            resizeQuality: 'high'
+          })
+        )
+      )
 
       const input: PdfWorkerInput = {
         options: {
           height,
           width,
-          bitmap: await createImageBitmap(canvas, { resizeQuality: 'high' }),
-          ocrBitmap: await createImageBitmap(ocrCanvas, {
-            resizeQuality: 'high'
-          }),
+          bitmap,
+          ocrBitmap,
           workspaceScale,
           totalHeight: trueHeight,
-          autoScale,
           autoPaginate,
           knownFontSize
         }
       }
 
-      setProgress(10)
-
-      pdfWorker.postMessage(input)
+      pdfWorker.postMessage(input, [bitmap, ocrBitmap])
 
       pdfWorker.onmessage = (e: MessageEvent<PdfWorkerOutput>) => {
-        const {
-          type,
-          message,
-          pageIndex = 0,
-          totalPages = 0,
-          pdfBuffer
-        } = e.data
+        const { type, message, pdfBuffer } = e.data
 
         if (type === 'progress') {
-          updateProgress(pageIndex / totalPages)
-          if (debug)
-            console.debug(`Rendering page ${pageIndex} of ${totalPages}`)
+          updateProgress(e.data.progress ?? 0)
         }
 
         if (type === 'done') {
           pdfWorker.terminate()
           setIsCreating(false)
-          setProgress(0)
+          setProgress(100)
 
           resolve({
             download: () => {
@@ -249,10 +227,14 @@ export const useDocument = ({
               const url = URL.createObjectURL(blob)
               const anchor = document.createElement('a')
 
-              anchor.setAttribute('href', url)
-              anchor.setAttribute('target', '_blank')
-              anchor.setAttribute('rel', 'noopener noreferrer')
-              anchor.setAttribute('download', 'document.pdf')
+              const attrs = [
+                ['href', url],
+                ['target', '_blank'],
+                ['rel', 'noopener noreferrer'],
+                ['download', 'document.pdf']
+              ]
+
+              attrs.forEach(([key, value]) => anchor.setAttribute(key, value))
 
               // anchor.click()
               window.open(url, '_blank')

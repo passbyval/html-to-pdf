@@ -1,10 +1,7 @@
 import type { IUseDocumentOptions } from '../useDocument/types'
 
 export interface PdfWorkerOptions
-  extends Pick<
-    IUseDocumentOptions,
-    'workspaceScale' | 'autoScale' | 'autoPaginate'
-  > {
+  extends Pick<IUseDocumentOptions, 'workspaceScale' | 'autoPaginate'> {
   knownFontSize: number
   width: number
   height: number
@@ -18,10 +15,20 @@ export interface PdfWorkerInput {
   action?: 'terminate'
 }
 
+export const Progress = {
+  Pending: 'progress',
+  Done: 'done',
+  Error: 'error'
+} as const
+
 export interface PdfWorkerOutput {
-  type: 'progress' | 'done' | 'error'
+  type: (typeof Progress)[keyof typeof Progress]
   pdfBuffer?: ArrayBuffer
-  pageIndex?: number
+  pageNumber?: number
   totalPages?: number
   message?: string
+  progress?: number
+  durationMs?: number
+  eta?: number
+  totalEstimatedTime?: number
 }

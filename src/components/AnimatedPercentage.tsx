@@ -13,15 +13,17 @@ export function AnimatedPercentage({ percent }: { percent: number }) {
   const motionValue = useMotionValue(0)
 
   const rounded = useTransform(motionValue, (latest) => Math.round(latest))
+
   useMotionValueEvent(rounded, 'change', (v) => {
     setDisplay(v)
   })
 
   useEffect(() => {
     const controls = animate(motionValue, percent, {
-      duration: 1,
       ease: 'easeOut'
     })
+
+    console.log(percent)
 
     return controls.stop
   }, [percent, motionValue])
