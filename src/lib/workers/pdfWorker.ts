@@ -8,7 +8,7 @@ import { getDimensions } from '../utils/getDimensions'
 import { getPaginatedCanvases } from '../utils/getPaginatedCanvases'
 import { transferBitmapToCanvas } from '../utils/transferBitmapToCanvas'
 
-import type { PdfWorkerInput, PdfWorkerOutput } from './types'
+import { type PdfWorkerInput, type PdfWorkerOutput, Progress } from './types'
 
 const workerPromise = (async () => {
   const [worker] = await chain(
@@ -53,12 +53,13 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
     const start = performance.now()
     const page = index === 0 ? doc : doc.addPage()
 
-    const [, dataURL] = await chain(
+    const [, imageData] = await chain(
       () => canvas.convertToBlob({ type: 'image/jpeg', quality: 1 }),
       blobToDataURL
     )
 
-    const { ratio } = getDimensions(canvas, doc.internal.pageSize)
+    const { width, height } = doc.internal.pageSize
+    const { ratio } = getDimensions(canvas, { width, height })
 
     await drawOcrFromBlocks({
       doc: page,
@@ -69,12 +70,12 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
     })
 
     page.addImage({
-      imageData: dataURL,
+      imageData,
       format: 'JPEG',
       x: 0,
       y: 0,
-      height: doc.internal.pageSize.height,
-      width: doc.internal.pageSize.width
+      width,
+      height
     })
 
     const end = performance.now()
@@ -83,18 +84,18 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
     durations.push(durationMs)
 
     const pageNumber = index + 1
-    const avgMs = durations.reduce((a, b) => a + b, 0) / durations.length
+    const averageMs = durations.reduce((a, b) => a + b, 0) / durations.length
     const totalPages = withPagination.length
-    const pagesRemaining = totalPages - (index + 1)
+    const pagesRemaining = totalPages - pageNumber
 
     const message: PdfWorkerOutput = {
-      type: 'progress',
+      type: Progress.Pending,
       pageNumber,
       totalPages,
-      progress: (index + 1) / totalPages,
+      progress: pageNumber / totalPages,
       durationMs,
-      eta: avgMs * pagesRemaining,
-      totalEstimatedTime: avgMs * totalPages
+      eta: averageMs * pagesRemaining,
+      totalEstimatedTime: averageMs * totalPages
     }
 
     postMessage(message)
@@ -103,7 +104,7 @@ self.onmessage = async (e: MessageEvent<PdfWorkerInput>) => {
   const buffer = doc.output('arraybuffer')
 
   const result: PdfWorkerOutput = {
-    type: 'done',
+    type: Progress.Done,
     pdfBuffer: buffer
   }
 

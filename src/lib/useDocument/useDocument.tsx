@@ -20,7 +20,11 @@ import { getCharDimensions } from '../utils/getCharDimensions.ts'
 import { makeStyleProps } from '../utils/makeStyleProps.ts'
 import { traverse } from '../utils/traverse.ts'
 import PdfWorker from '../workers/pdfWorker.ts?worker'
-import type { PdfWorkerInput, PdfWorkerOutput } from '../workers/types.ts'
+import {
+  Progress,
+  type PdfWorkerInput,
+  type PdfWorkerOutput
+} from '../workers/types.ts'
 
 export interface IUseDocumentOptions
   extends Partial<Omit<IDocumentProps, 'ref'>> {
@@ -211,11 +215,11 @@ export const useDocument = ({
       pdfWorker.onmessage = (e: MessageEvent<PdfWorkerOutput>) => {
         const { type, message, pdfBuffer } = e.data
 
-        if (type === 'progress') {
+        if (type === Progress.Pending) {
           updateProgress(e.data.progress ?? 0)
         }
 
-        if (type === 'done') {
+        if (type === Progress.Done) {
           pdfWorker.terminate()
           setIsCreating(false)
           setProgress(100)
@@ -244,7 +248,7 @@ export const useDocument = ({
           })
         }
 
-        if (type === 'error') {
+        if (type === Progress.Error) {
           setIsCreating(false)
           setProgress(0)
           console.error('Worker error:', message)
