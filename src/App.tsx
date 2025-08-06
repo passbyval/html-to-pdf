@@ -16,6 +16,7 @@ import { AnimatedPercentage } from './components/AnimatedPercentage'
 import { Button } from './components/ui/button'
 import { Box } from './lib/components/Box'
 import { useDocument } from './lib/useDocument'
+import { DocumentHeader } from './lib/components/DocumentHeader'
 import { times } from './utils/times'
 
 interface ITableData {
@@ -79,14 +80,14 @@ function App() {
         {/* <Viewer /> */}
         {/* <PreviewImage /> */}
         <Document>
-          <Header>
+          <DocumentHeader as={Header}>
             <img
               data-ocr="false"
               src={logo}
               loading="lazy"
               style={{ width: '300px', paddingRight: '15px' }}
             />
-          </Header>
+          </DocumentHeader>
           <Table className="overflow-hidden">
             <TableCaption>A list of your recent invoices.</TableCaption>
             <TableHeader>

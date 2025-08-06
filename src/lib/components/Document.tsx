@@ -1,11 +1,11 @@
 import { Box } from '@/lib/components/Box'
 import { type PropsWithChildren, type Ref } from 'react'
 import type { IPaperFormat } from '../constants'
-import { type IMargin } from '../constants'
+import { DocumentContext } from './DocumentContext'
 
 export interface IDocumentProps {
   format?: IPaperFormat
-  margin?: IMargin
+  margin?: number
   ref?: Ref<HTMLDivElement>
   width: number
   height: number
@@ -19,19 +19,25 @@ export function Document({
   ref
 }: PropsWithChildren<IDocumentProps>) {
   return (
-    <Box
-      style={{
-        backgroundColor: 'white',
-        width,
-        height,
-        padding,
-        overflowY: 'scroll',
-        overflowX: 'hidden'
+    <DocumentContext
+      value={{
+        margin: padding
       }}
-      ref={ref}
     >
-      {children}
-    </Box>
+      <Box
+        style={{
+          backgroundColor: 'white',
+          width,
+          height,
+          padding,
+          overflowY: 'scroll',
+          overflowX: 'hidden'
+        }}
+        ref={ref}
+      >
+        {children}
+      </Box>
+    </DocumentContext>
   )
 }
 
