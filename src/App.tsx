@@ -85,7 +85,7 @@ function App() {
               data-ocr="false"
               src={logo}
               loading="lazy"
-              className="w-[300px] mb-0.5"
+              className="w-[300px] mb-6"
             />
           </DocumentHeader>
           <Table className="overflow-hidden">
