@@ -1,5 +1,5 @@
 import type jsPDF from 'jspdf'
-import type { Line, RecognizeResult } from 'tesseract.js'
+import type { RecognizeResult } from 'tesseract.js'
 import { drawOcrWord } from '../utils/drawOcrWord'
 
 export async function drawOcrFromBlocks({
@@ -33,7 +33,7 @@ export async function drawOcrFromBlocks({
         const multiplier = knownFontSize / (lineHeight * ratio)
         const fontSize = lineHeight * ratio * multiplier
 
-        drawOcrWord(doc, line as Line, fontSize, ratio)
+        drawOcrWord(doc, line, fontSize, ratio)
       }
     }
   }

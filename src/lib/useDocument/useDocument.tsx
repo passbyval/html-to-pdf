@@ -243,7 +243,7 @@ export const useDocument = ({
               attrs.forEach(([key, value]) => anchor.setAttribute(key, value))
 
               // anchor.click()
-              // window.open(url, '_blank')
+              window.open(url, '_blank')
 
               URL.revokeObjectURL(url)
             }

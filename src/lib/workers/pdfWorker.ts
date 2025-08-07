@@ -1,12 +1,11 @@
 import jsPDF, { type ImageFormat } from 'jspdf'
-import { createWorker } from 'tesseract.js'
-import { OCR_PARAMS } from '../constants'
 import { blobToDataURL } from '../utils/blobToDataURL'
 import { chain } from '../utils/chain'
 import { drawOcrFromBlocks } from '../utils/drawOcrFromBlocks'
 import { getDimensions } from '../utils/getDimensions'
 import { getPaginatedCanvases } from '../utils/getPaginatedCanvases'
 import { transferBitmapToCanvas } from '../utils/transferBitmapToCanvas'
+import { createTesseractWorker } from './createTesseractWorker'
 
 import { type PdfWorkerInput, type PdfWorkerOutput, Progress } from './types'
 
@@ -17,14 +16,7 @@ const CONVERT_TO_BLOB_OPTIONS = {
   quality: 1
 }
 
-const workerPromise = (async () => {
-  const [worker] = await chain(
-    () => createWorker('eng'),
-    (worker) => worker.setParameters(OCR_PARAMS)
-  )
-
-  return worker
-})()
+const workerPromise = createTesseractWorker()
 
 self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
   const { action, options } = data

@@ -15,7 +15,6 @@ export function cropCanvas(
   }
 ): OffscreenCanvas[] {
   const topMargin = isFirstPage ? 0 : margin
-  const bottomMargin = margin
   const drawOffsetY = topMargin
 
   return sourceCanvases.map((canvas) => {
