@@ -12,14 +12,16 @@ export async function getPaginatedCanvases(
   canvas: OffscreenCanvas,
   ocrCanvas: OffscreenCanvas,
   pageHeight: number,
-  margin: number
+  margin: number,
+  customWords: string
 ): Promise<[OffscreenCanvas, OffscreenCanvas][]> {
   const totalHeight = canvas.height
   const firstPageHeight = pageHeight - margin
   const subsequentPageHeight = pageHeight - margin * 2
 
-  const [worker, { data }] = await chain(createTesseractWorker, (worker) =>
-    worker.recognize(ocrCanvas, {}, { blocks: true })
+  const [worker, { data }] = await chain(
+    () => createTesseractWorker(customWords),
+    (worker) => worker.recognize(ocrCanvas, {}, { blocks: true })
   )
 
   await worker.terminate()

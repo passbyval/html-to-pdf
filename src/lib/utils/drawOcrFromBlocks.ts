@@ -6,13 +6,11 @@ export async function drawOcrFromBlocks({
   doc,
   worker,
   canvas,
-  knownFontSize = 12,
   ratio
 }: {
   doc: jsPDF
   worker: Tesseract.Worker
   canvas: HTMLCanvasElement | OffscreenCanvas
-  knownFontSize: number
   ratio: number
 }) {
   const {
@@ -28,10 +26,9 @@ export async function drawOcrFromBlocks({
           bbox: { y1, y0 }
         } = line
         const lineHeight = y1 - y0
+        const fontSize = lineHeight * ratio
 
-        // Adjust font size based on OCR-calculated height and known baseline font size
-        const multiplier = knownFontSize / (lineHeight * ratio)
-        const fontSize = lineHeight * ratio * multiplier
+        console.log(fontSize, lineHeight, line.text)
 
         drawOcrWord(doc, line, fontSize, ratio)
       }

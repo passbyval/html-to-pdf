@@ -16,17 +16,8 @@ const CONVERT_TO_BLOB_OPTIONS = {
   quality: 1
 }
 
-const workerPromise = createTesseractWorker()
-
 self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
-  const { action, options } = data
-
-  if (action === 'terminate') {
-    return chain(
-      async () => await workerPromise,
-      (worker) => worker.terminate()
-    )
-  }
+  const { options } = data
 
   const {
     width,
@@ -35,21 +26,25 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
     bitmap,
     ocrBitmap,
     autoPaginate,
-    knownFontSize,
     pageHeight,
-    workspaceScale
+    workspaceScale,
+    customWords
   } = options
 
+  const workerPromise = createTesseractWorker(customWords)
   const doc = new jsPDF('p', 'px', [width, height], true)
 
   const [canvas] = transferBitmapToCanvas(bitmap)
   const [ocrCanvas] = transferBitmapToCanvas(ocrBitmap)
 
+  console.log({ customWords })
+
   const cropped = await getPaginatedCanvases(
     canvas,
     ocrCanvas,
     pageHeight,
-    margin * workspaceScale
+    margin * workspaceScale,
+    customWords
   )
 
   const withPagination = autoPaginate ? cropped : [cropped[0]]
@@ -72,7 +67,6 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
       doc: page,
       canvas: ocrCanvas,
       ratio,
-      knownFontSize,
       worker: await workerPromise
     })
 

@@ -12,5 +12,7 @@ export function transferBitmapToCanvas(
     ctx?.drawImage(bitmap, 0, 0)
   }
 
+  bitmap.close()
+
   return [canvas, ctx] as const
 }

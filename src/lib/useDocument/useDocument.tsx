@@ -25,6 +25,7 @@ import {
   type PdfWorkerInput,
   type PdfWorkerOutput
 } from '../workers/types.ts'
+import { P } from 'node_modules/framer-motion/dist/types.d-Cjd591yU'
 
 export interface IUseDocumentOptions
   extends Partial<Omit<IDocumentProps, 'ref'>> {
@@ -157,11 +158,6 @@ export const useDocument = ({
         })
       }
 
-      const testNode = clonedNode.cloneNode(true) as HTMLDivElement
-      const knownFontSize = getCharDimensions(testNode)
-
-      document.body.removeChild(testNode)
-
       const TO_CANVAS_OPTIONS: Options = {
         backgroundColor: 'white',
         quality: 1,
@@ -176,13 +172,79 @@ export const useDocument = ({
         (canvas) => setDataUri(canvas.toDataURL())
       )
 
-      clonedNode.querySelectorAll("[data-ocr='false']")?.forEach((node) => {
+      const customWords = Array.from(
+        document.querySelectorAll('[data-ocr]')
+      )?.reduce<string[]>((acc, node, index) => {
         if (node instanceof HTMLElement) {
-          node.style.opacity = '0'
+          const value = node.getAttribute('data-ocr')
+
+          if (!value) return acc
+
+          const sheet = new CSSStyleSheet()
+          const className = `pdfize-ocr-helper-node-${index}`
+
+          const { height, width } = node.getBoundingClientRect()
+
+          const [x, y] = ['data-ocr-x', 'data-ocr-y'].map(
+            (attr) => parseFloat(node.getAttribute(attr) ?? '') || 0
+          )
+
+          const style = getComputedStyle(node)
+          const fontSize = Math.max(height, parseFloat(style.fontSize))
+
+          sheet.replaceSync(
+            css`
+              .${className} {
+                display: inline;
+                position: relative;
+
+                &::before {
+                  content: '${value}';
+                  display: block;
+                  font-size: ${fontSize}px;
+                  margin-top: ${y}px;
+                  margin-left: ${x}px;
+                  width: ${width}px;
+                  height: ${height}px;
+                }
+              }
+            `.replace(/[\s\n]*/gm, '')
+          )
+
+          document.adoptedStyleSheets = [
+            ...Array.from(document.adoptedStyleSheets ?? []),
+            sheet
+          ]
+
+          const div = document.createElement('div')
+
+          const attributes = Array.from(node.attributes)
+
+          attributes.forEach((attr) => {
+            const clonedAttr = attr.cloneNode(true)
+
+            if (clonedAttr instanceof Attr) {
+              div.setAttributeNode(clonedAttr)
+            }
+          })
+
+          div.classList.add(className)
+          node.replaceWith(div)
+
+          return acc.includes(value) ? acc : [...acc, value]
         }
-      })
+
+        return acc
+      }, [])
 
       const ocrCanvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
+
+      ocrCanvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob)
+          window.open(url)
+        }
+      })
 
       document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
         (s) => s !== sheet
@@ -208,7 +270,7 @@ export const useDocument = ({
           bitmap,
           ocrBitmap,
           autoPaginate,
-          knownFontSize
+          customWords: `${customWords.join('\n')}\n`
         }
       }
 

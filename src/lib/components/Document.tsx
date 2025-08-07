@@ -26,6 +26,7 @@ export function Document({
     >
       <Box
         style={{
+          position: 'relative',
           backgroundColor: 'white',
           width,
           height,

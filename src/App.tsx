@@ -11,13 +11,14 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { faker } from '@faker-js/faker'
-import { type ComponentProps, type PropsWithChildren } from 'react'
+import { useEffect, type ComponentProps, type PropsWithChildren } from 'react'
 import { AnimatedPercentage } from './components/AnimatedPercentage'
 import { Button } from './components/ui/button'
 import { Box } from './lib/components/Box'
 import { useDocument } from './lib/useDocument'
 import { DocumentHeader } from './lib/components/DocumentHeader'
 import { times } from './utils/times'
+import { css } from './lib/utils/css'
 
 interface ITableData {
   accountNumber: string
@@ -64,6 +65,67 @@ function App() {
     download()
   }
 
+  // useEffect(() => {
+  //   document.querySelectorAll('[data-ocr]')?.forEach((node, index) => {
+  //     if (node instanceof HTMLElement) {
+  //       const value = node.getAttribute('data-ocr')
+
+  //       if (!value) return
+
+  //       const sheet = new CSSStyleSheet()
+  //       const className = `pdfize-ocr-helper-node-${index}`
+
+  //       const { height, width } = node.getBoundingClientRect()
+
+  //       const [x, y] = ['data-ocr-x', 'data-ocr-y'].map(
+  //         (attr) => parseFloat(node.getAttribute(attr) ?? '') || 0
+  //       )
+
+  //       const style = getComputedStyle(node)
+  //       const fontSize = Math.max(height, parseFloat(style.fontSize))
+
+  //       sheet.replaceSync(
+  //         css`
+  //           .${className} {
+  //             display: inline;
+  //             position: relative;
+
+  //             &::before {
+  //               display: block;
+  //               content: '${value}';
+  //               font-size: ${fontSize}px;
+  //               margin-top: ${y}px;
+  //               margin-left: ${x}px;
+  //               width: ${width}px;
+  //               height: ${height}px;
+  //             }
+  //           }
+  //         `.replace(/[\s\n]*/gm, '')
+  //       )
+
+  //       document.adoptedStyleSheets = [
+  //         ...Array.from(document.adoptedStyleSheets ?? []),
+  //         sheet
+  //       ]
+
+  //       const div = document.createElement('div')
+
+  //       const attributes = Array.from(node.attributes)
+
+  //       attributes.forEach((attr) => {
+  //         const clonedAttr = attr.cloneNode(true)
+
+  //         if (clonedAttr instanceof Attr) {
+  //           div.setAttributeNode(clonedAttr)
+  //         }
+  //       })
+
+  //       div.classList.add(className)
+  //       node.replaceWith(div)
+  //     }
+  //   })
+  // }, [])
+
   return (
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
       <Box className="absolute" top={25} right={25} zIndex={99}>
@@ -82,7 +144,9 @@ function App() {
         <Document>
           <DocumentHeader as={Header}>
             <img
-              data-ocr="false"
+              data-ocr="Logoipsum"
+              data-ocr-x="50"
+              data-ocr-y="-20"
               src={logo}
               loading="lazy"
               className="w-[300px] mb-6"
