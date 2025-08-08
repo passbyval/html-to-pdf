@@ -16,7 +16,6 @@ import {
 } from '../constants.ts'
 import { chain } from '../utils/chain.ts'
 import { css } from '../utils/css.ts'
-import { getCharDimensions } from '../utils/getCharDimensions.ts'
 import { makeStyleProps } from '../utils/makeStyleProps.ts'
 import { traverse } from '../utils/traverse.ts'
 import PdfWorker from '../workers/pdfWorker.ts?worker'
@@ -25,7 +24,6 @@ import {
   type PdfWorkerInput,
   type PdfWorkerOutput
 } from '../workers/types.ts'
-import { P } from 'node_modules/framer-motion/dist/types.d-Cjd591yU'
 
 export interface IUseDocumentOptions
   extends Partial<Omit<IDocumentProps, 'ref'>> {
