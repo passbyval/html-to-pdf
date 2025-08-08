@@ -33,10 +33,23 @@ export function getTextNodes(
 
       const rect = range.getBoundingClientRect()
 
-      const parent = current.parentElement
+      const { parentElement: parent } = current
+
       const style = parent
         ? getComputedStyle(parent)
         : ({} as CSSStyleDeclaration)
+
+      const invisibleStyles = [
+        ['display', 'none'],
+        ['visibility', 'hidden'],
+        ['opacity', '0']
+      ]
+
+      const isInvisible = invisibleStyles.some(
+        ([prop, val]) => style[prop as keyof CSSStyleDeclaration] === val
+      )
+
+      if (isInvisible) continue
 
       const fontSize = parent ? parseFloat(style.fontSize) : 0
       const letterSpacing = parent ? parseFloat(style.letterSpacing) : 0

@@ -43,17 +43,10 @@ export const PAPER_DIMENSIONS: Record<
   LETTER: [2551, 3295]
 }
 
-export const TEST_TEXT = `
-  ABCDEFGHIJKLMNOPQRSTUVWXYZ
-  abcdefghijklmnopqrstuvwxyz
-  0123456789
-  \`~!@#$%^&*()_+-=[]{}\\|;:'\",<.>/?
-`
-  .replace(/\s+/g, ' ')
-  .trim()
-
 export const OCR_PARAMS: Partial<WorkerParams> = {
-  preserve_interword_spaces: '0'
+  preserve_interword_spaces: '0',
+  language_model_penalty_non_freq_dict_word: 'T',
+  language_model_penalty_non_dict_word: 'T'
 }
 
 export const CANVAS_CONTEXT_OPTIONS = {

@@ -1,4 +1,4 @@
-import type { IUseDocumentOptions } from '../useDocument/types'
+import type { IOcrSettings, IUseDocumentOptions } from '../useDocument/types'
 
 export interface PdfWorkerOptions
   extends Pick<IUseDocumentOptions, 'autoPaginate' | 'workspaceScale'> {
@@ -9,6 +9,8 @@ export interface PdfWorkerOptions
   ocrBitmap: ImageBitmap
   pageHeight: number
   customWords: string
+  charWhiteList: string
+  ocrSettings: Partial<IOcrSettings>
 }
 
 export interface PdfWorkerInput {

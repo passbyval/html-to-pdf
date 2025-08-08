@@ -7,7 +7,7 @@ import {
   type PropsWithChildren,
   type ReactNode
 } from 'react'
-import { Document, type IDocumentProps } from '../components/Document.tsx'
+import { Document } from '../components/Document.tsx'
 import {
   DEFAULT_MARGIN,
   PAPER_DIMENSIONS,
@@ -24,22 +24,10 @@ import {
   type PdfWorkerInput,
   type PdfWorkerOutput
 } from '../workers/types.ts'
-
-export interface IUseDocumentOptions
-  extends Partial<Omit<IDocumentProps, 'ref'>> {
-  /**
-   * A scaling factor applied to the document to reduce its on-screen size.
-   *
-   * By default, the document is scaled down from 300 DPI ANSI Letter size
-   * using a factor of 3.5 so it fits within typical screen resolutions.
-   *
-   * Higher default resolutions ensures that the final PDF is crisp.
-   *
-   */
-  workspaceScale?: number
-  autoPaginate?: boolean
-  debug?: boolean
-}
+import { getTextNodes } from '../utils/getTextNodes.ts'
+import { getUniqueCharsFromTextNodes } from '../utils/getUniqueCharsFromTextNodes.ts'
+import { getUniqueWordsFromTextNodes } from '../utils/getUniqueWordsFromTextNodes.ts'
+import type { IDownload, IUseDocumentOptions } from './types.ts'
 
 export const useDocument = ({
   format = 'Letter',
@@ -47,6 +35,9 @@ export const useDocument = ({
   workspaceScale = 3.5,
   autoPaginate = true,
   debug = false,
+  ocrSettings = {
+    confidenceThreshold: 30
+  },
   ...props
 }: IUseDocumentOptions = {}) => {
   const ref = useRef<HTMLDivElement>(null)
@@ -78,51 +69,50 @@ export const useDocument = ({
 
   const htmlToImage = useMemo(() => (async () => import('html-to-image'))(), [])
 
-  const create = (): Promise<{ download: () => void }> => {
+  const create = (): Promise<{
+    download: IDownload
+    message?: string
+  }> => {
     setIsCreating(true)
     setProgress(0)
 
     return new Promise(async (resolve) => {
-      if (!ref.current) {
-        return Promise.resolve({ download: () => void 0 })
+      if (!ref.current) return Promise.resolve({ download: () => () => void 0 })
+
+      if (!(ref.current instanceof HTMLElement)) {
+        const current = (ref.current as unknown)!
+        const instanceType = current.constructor.name
+
+        return Promise.reject({
+          download: () => () => void 0,
+          message: `Invalid element provided. Expected type of HTMLElement, got ${instanceType}.`
+        })
       }
 
       const pdfWorker = new PdfWorker()
-      const sheet = new CSSStyleSheet()
-
-      const clonedNode = ref.current?.cloneNode(true) as HTMLDivElement
+      const clonedNode = ref.current.cloneNode(true) as HTMLElement
 
       const { scrollHeight } = ref.current
       const trueHeight = Math.max(height, scrollHeight)
 
-      await sheet.replace(
-        css`
-          .pdfize-node {
-            padding: ${padding}px;
-            min-height: ${trueHeight}px;
-            width: ${width}px;
-            margin: 0px;
-            border: none;
-            overflow: visible;
-            font-smooth: antialiased;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            transform: translateZ(0);
-            will-change: transform;
-            backface-visibility: hidden;
-            text-rendering: optimizeLegibility;
-            image-rendering: crisp-edges;
-          }
-        `.replace(/[\s\n]*/gm, '')
-      )
+      clonedNode.style.cssText = css`
+        padding: ${padding}px;
+        min-height: ${trueHeight}px;
+        width: ${width}px;
+        margin: 0px;
+        border: none;
+        overflow: visible;
+        font-smooth: antialiased;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        transform: translateZ(0);
+        will-change: transform;
+        backface-visibility: hidden;
+        text-rendering: optimizeLegibility;
+        image-rendering: crisp-edges;
+      `
 
-      clonedNode.classList.add('pdfize-node')
       document.body.appendChild(clonedNode)
-
-      document.adoptedStyleSheets = [
-        ...Array.from(document.adoptedStyleSheets ?? []),
-        sheet
-      ]
 
       for (const node of traverse(clonedNode)) {
         const style = getComputedStyle(node)
@@ -170,83 +160,88 @@ export const useDocument = ({
         (canvas) => setDataUri(canvas.toDataURL())
       )
 
-      const customWords = Array.from(
-        document.querySelectorAll('[data-ocr]')
-      )?.reduce<string[]>((acc, node, index) => {
-        if (node instanceof HTMLElement) {
-          const value = node.getAttribute('data-ocr')
+      const userDefinedReplacements = Array.from(
+        clonedNode.querySelectorAll('[data-ocr]')
+      )?.reduce<string[]>((acc, node) => {
+        const value = node.getAttribute('data-ocr')
 
-          if (!value) return acc
+        if (!(node instanceof HTMLElement) || !value) return acc
 
-          const sheet = new CSSStyleSheet()
-          const className = `pdfize-ocr-helper-node-${index}`
+        if (value === 'false') {
+          node.style.opacity = '0'
+          return acc
+        }
 
-          const { height, width } = node.getBoundingClientRect()
+        const { height, width } = node.getBoundingClientRect()
 
-          const [x, y] = ['data-ocr-x', 'data-ocr-y'].map(
-            (attr) => parseFloat(node.getAttribute(attr) ?? '') || 0
-          )
+        const [x, y] = ['data-ocr-x', 'data-ocr-y'].map(
+          (attr) => parseFloat(node.getAttribute(attr) ?? '') || 0
+        )
 
-          const style = getComputedStyle(node)
-          const fontSize = Math.max(height, parseFloat(style.fontSize))
+        const style = getComputedStyle(node)
+        const fontSize = Math.max(height, parseFloat(style.fontSize))
 
-          sheet.replaceSync(
-            css`
-              .${className} {
-                display: inline;
-                position: relative;
+        const ocrElement = document.createElement('div')
+        const textSpan = document.createElement('span')
 
-                &::before {
-                  content: '${value}';
-                  display: block;
-                  font-size: ${fontSize}px;
-                  margin-top: ${y}px;
-                  margin-left: ${x}px;
-                  width: ${width}px;
-                  height: ${height}px;
-                }
-              }
-            `.replace(/[\s\n]*/gm, '')
-          )
+        ocrElement.style.cssText = css`
+          display: inline-block;
+          position: relative;
+          margin-top: ${y}px;
+          margin-left: ${x}px;
+          width: ${width}px;
+          height: ${height}px;
+          background: #fff;
+          line-height: 1;
+          white-space: nowrap;
+        `
 
-          document.adoptedStyleSheets = [
-            ...Array.from(document.adoptedStyleSheets ?? []),
-            sheet
-          ]
+        textSpan.textContent = value
 
-          const div = document.createElement('div')
+        textSpan.style.cssText = css`
+          background: #fff;
+          color: #000;
+          letter-spacing: 3px;
+          font-family: 'Georgia', serif;
+          font-weight: 400;
+          font-size: ${Math.max(fontSize, 48)}px;
+          line-height: 1;
+          text-rendering: geometricPrecision;
+          -webkit-font-smoothing: none;
+          font-smooth: never;
+          display: inline-block;
+          border: 1px solid transparent;
+          vertical-align: baseline;
+        `
 
-          const attributes = Array.from(node.attributes)
-
-          attributes.forEach((attr) => {
+        const attributes = Array.from(node.attributes)
+        attributes.forEach((attr) => {
+          if (attr.name.startsWith('data-')) {
             const clonedAttr = attr.cloneNode(true)
 
             if (clonedAttr instanceof Attr) {
-              div.setAttributeNode(clonedAttr)
+              ocrElement.setAttributeNode(clonedAttr)
             }
-          })
+          }
+        })
 
-          div.classList.add(className)
-          node.replaceWith(div)
+        ocrElement.appendChild(textSpan)
+        node.replaceWith(ocrElement)
 
-          return acc.includes(value) ? acc : [...acc, value]
-        }
-
-        return acc
+        return acc.includes(value) ? acc : [...acc, value]
       }, [])
 
+      const textNodes = getTextNodes(clonedNode, canvas)
+      const charWhiteList = getUniqueCharsFromTextNodes(textNodes).join('')
+
+      const customWords = getUniqueWordsFromTextNodes(textNodes, [
+        ...userDefinedReplacements,
+        'Cl0udCats'
+      ])
+        .filter((w) => w !== 'CloudCats')
+        .join('\n')
+
       const ocrCanvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
-
-      ocrCanvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob)
-          window.open(url)
-        }
-      })
-
-      document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
-        (s) => s !== sheet
-      )
 
       document.body.removeChild(clonedNode)
 
@@ -268,7 +263,9 @@ export const useDocument = ({
           bitmap,
           ocrBitmap,
           autoPaginate,
-          customWords: `${customWords.join('\n')}\n`
+          customWords,
+          charWhiteList,
+          ocrSettings
         }
       }
 
@@ -278,34 +275,41 @@ export const useDocument = ({
         const { type, message, pdfBuffer } = e.data
 
         if (type === Progress.Pending) {
-          updateProgress(e.data.progress ?? 0)
+          return updateProgress(e.data.progress ?? 0)
         }
 
         if (type === Progress.Done) {
           pdfWorker.terminate()
+
           setIsCreating(false)
           setProgress(100)
 
-          resolve({
-            download: () => {
-              const blob = new Blob([pdfBuffer!], { type: 'application/pdf' })
+          const blob = new Blob([pdfBuffer!], { type: 'application/pdf' })
+          const url = URL.createObjectURL(blob)
 
-              const url = URL.createObjectURL(blob)
-              const anchor = document.createElement('a')
+          setPdfDataUri(url)
 
-              const attrs = [
-                ['href', url],
-                ['target', '_blank'],
-                ['rel', 'noopener noreferrer'],
-                ['download', 'document.pdf']
-              ]
+          return resolve({
+            download: (options) => {
+              if (options?.type === 'direct') {
+                const anchor = document.createElement('a')
 
-              attrs.forEach(([key, value]) => anchor.setAttribute(key, value))
+                ;[
+                  ['href', url],
+                  ['target', '_blank'],
+                  ['rel', 'noopener noreferrer'],
+                  ['download', 'document.pdf']
+                ].forEach(([key, value]) => anchor.setAttribute(key, value))
 
-              // anchor.click()
+                anchor.click()
+                document.removeChild(anchor)
+
+                return () => void 0
+              }
+
               window.open(url, '_blank')
 
-              URL.revokeObjectURL(url)
+              return () => URL.revokeObjectURL(url)
             }
           })
         }

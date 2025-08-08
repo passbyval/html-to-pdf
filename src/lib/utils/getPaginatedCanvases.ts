@@ -1,6 +1,5 @@
 import { cropCanvas } from './cropCanvas'
-import { createTesseractWorker } from '../workers/createTesseractWorker'
-import { chain } from './chain'
+import type { Worker } from 'tesseract.js'
 
 interface LineBox {
   top: number
@@ -9,22 +8,22 @@ interface LineBox {
 }
 
 export async function getPaginatedCanvases(
-  canvas: OffscreenCanvas,
-  ocrCanvas: OffscreenCanvas,
-  pageHeight: number,
-  margin: number,
-  customWords: string
+  [canvas, ocrCanvas]: [OffscreenCanvas, OffscreenCanvas],
+  {
+    pageHeight,
+    margin,
+    worker
+  }: {
+    pageHeight: number
+    margin: number
+    worker: Worker
+  }
 ): Promise<[OffscreenCanvas, OffscreenCanvas][]> {
   const totalHeight = canvas.height
   const firstPageHeight = pageHeight - margin
   const subsequentPageHeight = pageHeight - margin * 2
 
-  const [worker, { data }] = await chain(
-    () => createTesseractWorker(customWords),
-    (worker) => worker.recognize(ocrCanvas, {}, { blocks: true })
-  )
-
-  await worker.terminate()
+  const { data } = await worker.recognize(ocrCanvas, {}, { blocks: true })
 
   const allLines: LineBox[] = (data.blocks ?? []).flatMap((block) =>
     block.paragraphs.flatMap((paragraph) =>

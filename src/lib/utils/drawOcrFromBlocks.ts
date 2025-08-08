@@ -1,17 +1,20 @@
 import type jsPDF from 'jspdf'
-import type { RecognizeResult } from 'tesseract.js'
+import type { RecognizeResult, Worker } from 'tesseract.js'
 import { drawOcrWord } from '../utils/drawOcrWord'
+import type { IOcrSettings } from '../useDocument/types'
 
 export async function drawOcrFromBlocks({
   doc,
   worker,
   canvas,
-  ratio
+  ratio,
+  ocrSettings
 }: {
   doc: jsPDF
-  worker: Tesseract.Worker
+  worker: Worker
   canvas: HTMLCanvasElement | OffscreenCanvas
   ratio: number
+  ocrSettings: Partial<IOcrSettings>
 }) {
   const {
     data: { blocks = [] }
@@ -28,7 +31,11 @@ export async function drawOcrFromBlocks({
         const lineHeight = y1 - y0
         const fontSize = lineHeight * ratio
 
-        console.log(fontSize, lineHeight, line.text)
+        console.log(fontSize, lineHeight, line.text, {
+          confidence: line.confidence
+        })
+
+        if (line.confidence <= (ocrSettings.confidenceThreshold ?? 30)) continue
 
         drawOcrWord(doc, line, fontSize, ratio)
       }
