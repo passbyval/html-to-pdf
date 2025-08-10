@@ -14,8 +14,7 @@ export function drawOcrWord(
   const { debug = false, logger } = options
 
   if (!line.words) {
-    logger?.verbose('No words found in line', { lineText: line.text })
-    return
+    return logger?.verbose('No words found in line', { lineText: line.text })
   }
 
   logger?.debug(`Processing line with ${line.words.length} words`, {
@@ -29,22 +28,22 @@ export function drawOcrWord(
 
   const wordProcessingResults = line.words.map((word) => {
     const { text, bbox, confidence } = word
+    const { x0, y0, x1, y1 } = bbox
 
     logger?.verbose(`Processing word: "${text}"`, {
       confidence,
-      x0: bbox.x0,
-      y0: bbox.y0,
-      x1: bbox.x1,
-      y1: bbox.y1,
-      width: bbox.x1 - bbox.x0,
-      height: bbox.y1 - bbox.y0
+      x0,
+      y0,
+      y1,
+      width: x1 - x0,
+      height: y1 - y0
     })
 
     const calculations = {
-      x: bbox.x0 * ratio,
+      x: x0 * ratio,
       y0: line.baseline.y0 * ratio,
       y1: line.baseline.y1 * ratio,
-      wordWidth: (bbox.x1 - bbox.x0) * ratio,
+      wordWidth: (x1 - x0) * ratio,
       jspdfWidth: doc.getTextWidth(text),
       charCount: text.length - 1
     }
@@ -79,12 +78,7 @@ export function drawOcrWord(
       doc.setDrawColor(255, 0, 0)
       doc.setLineWidth(0.25)
 
-      doc.rect(
-        bbox.x0 * ratio,
-        bbox.y0 * ratio,
-        (bbox.x1 - bbox.x0) * ratio,
-        (bbox.y1 - bbox.y0) * ratio
-      )
+      doc.rect(x0 * ratio, y0 * ratio, (x1 - x0) * ratio, (y1 - y0) * ratio)
     }
 
     return {
@@ -95,20 +89,17 @@ export function drawOcrWord(
     }
   })
 
-  const summary = wordProcessingResults.reduce(
-    (acc, result) => ({
-      processedWords: acc.processedWords + (result.processed ? 1 : 0),
-      totalCharSpace: acc.totalCharSpace + result.charSpace
+  const { processedWords, totalCharSpace } = wordProcessingResults.reduce(
+    ({ processedWords, totalCharSpace }, result) => ({
+      processedWords: processedWords + (result.processed ? 1 : 0),
+      totalCharSpace: totalCharSpace + result.charSpace
     }),
     { processedWords: 0, totalCharSpace: 0 }
   )
 
   logger?.info('Line processing completed', {
-    wordsProcessed: summary.processedWords,
-    averageCharSpace:
-      summary.processedWords > 0
-        ? summary.totalCharSpace / summary.processedWords
-        : 0,
+    wordsProcessed: processedWords,
+    averageCharSpace: processedWords > 0 ? totalCharSpace / processedWords : 0,
     lineConfidence: line.confidence,
     fontSize
   })

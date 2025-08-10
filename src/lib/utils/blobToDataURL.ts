@@ -7,6 +7,7 @@ export async function blobToDataURL(
   const logger = DebugLogger.create(debug)
 
   logger.debug('Converting blob to data URL')
+
   logger.verbose('Blob conversion started', {
     blobSize: `${Math.round(blob.size / 1024)}KB`,
     blobType: blob.type
@@ -23,6 +24,7 @@ export async function blobToDataURL(
         logger.debug('Blob conversion completed', {
           duration: `${conversionTime}ms`
         })
+
         logger.verbose('Data URL created', {
           originalSize: `${Math.round(blob.size / 1024)}KB`,
           dataUrlLength: reader.result.length,

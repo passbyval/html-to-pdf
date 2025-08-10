@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { hydrateRoot } from 'react-dom/client'
 import App from './App'
 
-import './app.css'
+import './App.css'
 import './index.css'
 
 hydrateRoot(
@@ -11,3 +11,4 @@ hydrateRoot(
     <App />
   </StrictMode>
 )
+

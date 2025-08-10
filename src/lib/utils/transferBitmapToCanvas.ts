@@ -23,7 +23,7 @@ export function transferBitmapToCanvas(
     logger.verbose('Used ImageBitmapRenderingContext for optimal transfer')
   } else {
     ctx?.drawImage(bitmap, 0, 0)
-    logger.verbose('Used 2D context for bitmap transfer')
+    logger.verbose('Fallback to 2D context for bitmap transfer')
   }
 
   bitmap.close()

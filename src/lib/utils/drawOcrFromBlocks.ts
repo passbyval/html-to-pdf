@@ -76,10 +76,8 @@ export async function drawOcrFromBlocks({
 
   if (!blocks || blocks.length === 0) {
     logger?.error('No OCR blocks found', {
-      canvasSize: {
-        width: canvas.width,
-        height: canvas.height
-      },
+      canvasWidth: canvas.width,
+      canvasHeight: canvas.height,
       overallConfidence
     })
     return
@@ -128,18 +126,12 @@ export async function drawOcrFromBlocks({
             threshold: confidenceThreshold,
             fontSize: Math.round(fontSize),
             lineHeight: Math.round(lineHeight),
-            bbox: {
-              y0: Math.round(y0),
-              y1: Math.round(y1),
-              height: Math.round(lineHeight)
-            }
+            y0: Math.round(y0),
+            y1: Math.round(y1),
+            height: Math.round(lineHeight)
           })
 
-          // Legacy console.log for backwards compatibility
-          if (
-            debug === 'debug' ||
-            (Array.isArray(debug) && debug.includes('debug'))
-          ) {
+          if (Array.isArray(debug) && debug.includes('debug')) {
             console.log({
               text: line.text,
               confidence: line.confidence
@@ -184,24 +176,29 @@ export async function drawOcrFromBlocks({
   logger?.groupEnd()
 
   const processingTime = Date.now() - startTime
-  const averageConfidence =
-    finalState.totalLines > 0
-      ? finalState.confidenceSum / finalState.totalLines
-      : 0
+
+  const {
+    totalLines,
+    confidenceSum,
+    fontSizes,
+    processedLines,
+    skippedLines,
+    totalWords
+  } = finalState
+
+  const averageConfidence = totalLines > 0 ? confidenceSum / totalLines : 0
+
   const averageFontSize =
-    finalState.fontSizes.length > 0
-      ? finalState.fontSizes.reduce((a, b) => a + b, 0) /
-        finalState.fontSizes.length
-      : 0
-  const successRate =
-    finalState.totalLines > 0
-      ? (finalState.processedLines / finalState.totalLines) * 100
+    fontSizes.length > 0
+      ? fontSizes.reduce((a, b) => a + b, 0) / fontSizes.length
       : 0
 
+  const successRate = totalLines > 0 ? (processedLines / totalLines) * 100 : 0
+
   const summaryInfo = {
-    processed: `${finalState.processedLines}/${finalState.totalLines} lines`,
-    skipped: finalState.skippedLines,
-    words: finalState.totalWords,
+    processed: `${processedLines}/${totalLines} lines`,
+    skipped: skippedLines,
+    words: totalWords,
     avgConfidence: `${Math.round(averageConfidence)}%`,
     avgFontSize: `${Math.round(averageFontSize)}px`,
     duration: `${processingTime}ms`,
@@ -210,16 +207,15 @@ export async function drawOcrFromBlocks({
 
   logger?.info('OCR processing completed', summaryInfo)
 
-  // Show analytics table if debug logging is enabled
   if (Array.isArray(debug) && debug.includes('info')) {
     const analyticsTable = [
       {
         metric: 'Lines Found',
-        value: finalState.totalLines
+        value: totalLines
       },
       {
         metric: 'Lines Processed',
-        value: finalState.processedLines
+        value: processedLines
       },
       {
         metric: 'Lines Skipped',

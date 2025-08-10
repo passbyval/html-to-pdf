@@ -37,8 +37,11 @@ export async function getPaginatedCanvases(
     subsequentPageHeight: `${subsequentPageHeight}px`
   })
 
-  logger.debug('Performing OCR analysis for line detection')
+  logger.time('Performing OCR analysis for line detection', 'debug')
+
   const { data } = await worker.recognize(ocrCanvas, {}, { blocks: true })
+
+  logger.timeEnd('Performing OCR analysis for line detection', 'debug')
 
   const allLines: LineBox[] = (data.blocks ?? []).flatMap((block) =>
     block.paragraphs.flatMap((paragraph) =>

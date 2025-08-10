@@ -34,7 +34,6 @@ import {
   type ProcessingMetrics,
   type IDownloadOptions
 } from '../workers/types'
-import { pick } from '../utils/pick'
 
 interface IUseDocumentOptions {
   readonly format?: IPaperFormat

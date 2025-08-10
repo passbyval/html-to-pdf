@@ -1,6 +1,3 @@
-/**
- * Traverse the DOM tree using TreeWalker and yield each HTMLElement.
- */
 export function* traverse(root: Node): Generator<HTMLElement> {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
     acceptNode: (node) =>

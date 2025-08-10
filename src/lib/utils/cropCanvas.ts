@@ -24,7 +24,8 @@ export function cropCanvas(
 
   logger.verbose('Cropping canvas section', {
     sourceCanvases: sourceCanvases.length,
-    cropArea: { y: Math.round(y), height: Math.round(height) },
+    cropY: Math.round(y),
+    cropheight: Math.round(height),
     pageHeight: Math.round(pageHeight),
     margin: Math.round(margin),
     isFirstPage,
@@ -33,13 +34,13 @@ export function cropCanvas(
 
   return sourceCanvases.map((canvas, index) => {
     const cv = new OffscreenCanvas(canvas.width, pageHeight)
+
     const ctx = cv.getContext('2d', {
       desynchronized: true,
       willReadFrequently: true,
       colorType: 'float16'
     })!
 
-    // Fill with white background
     ctx.fillStyle = 'white'
     ctx.fillRect(0, 0, cv.width, cv.height)
 
@@ -50,11 +51,11 @@ export function cropCanvas(
       0,
       y,
       canvas.width,
-      drawableHeight, // source rect
+      drawableHeight,
       0,
       drawOffsetY,
       canvas.width,
-      drawableHeight // dest rect, vertically offset by topMargin
+      drawableHeight
     )
 
     logger.verbose(`Canvas ${index + 1} cropped`, {
