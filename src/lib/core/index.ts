@@ -1,7 +1,7 @@
 import type { Options as ToCanvasOptions } from 'html-to-image/lib/types'
 import { CONFIG, type OCRSettings } from '../config'
 import { DebugLogger, type IDebugOptions } from '../DebugLogger'
-import PdfWorker from './workers/pdfWorker?worker'
+import PdfWorker from '../workers/pdfWorker?worker'
 import { css } from '../utils/css'
 import { traverse } from '../utils/traverse'
 import { getTextNodes } from '../utils/getTextNodes'
@@ -26,6 +26,12 @@ import {
   type IPaperFormat
 } from '../constants'
 
+export interface IDimensions {
+  readonly width: number
+  readonly height: number
+  readonly padding: number
+}
+
 export interface ICreateOptions {
   format?: IPaperFormat
   margin?: IMargin | number
@@ -37,11 +43,13 @@ export interface ICreateOptions {
   autoPaginate?: boolean
 }
 
-const getDimensions = ({
+export const getDimensions = ({
   format,
   margin,
   workspaceScale
-}: Required<Pick<ICreateOptions, 'workspaceScale' | 'format' | 'margin'>>) => {
+}: Required<
+  Pick<ICreateOptions, 'workspaceScale' | 'format' | 'margin'>
+>): IDimensions => {
   const [WIDTH, HEIGHT] =
     PAPER_DIMENSIONS[format?.toUpperCase() as Uppercase<IPaperFormat>]
 
@@ -72,10 +80,7 @@ const createErrorHandler = ({
   }
 }
 
-export const create = (
-  element: HTMLElement | undefined | null,
-  options: ICreateOptions
-) => {
+export const getDefaults = (options: ICreateOptions) => {
   const {
     format = 'Letter',
     debug = false,
@@ -85,10 +90,34 @@ export const create = (
     ocrSettings = {
       confidenceThreshold: CONFIG.OCR.CONFIDENCE_THRESHOLD,
       pageSegMode: CONFIG.OCR.PAGE_SEG_MODE
-    },
+    }
+  } = options
+
+  return {
+    ...options,
+    format,
+    debug,
+    margin,
+    workspaceScale,
+    autoPaginate,
+    ocrSettings
+  }
+}
+
+export const create = (
+  element: HTMLElement | undefined | null,
+  options: ICreateOptions
+) => {
+  const {
+    format,
+    debug,
+    margin,
+    workspaceScale,
+    autoPaginate,
+    ocrSettings,
     onProgress,
     onError
-  } = options
+  } = getDefaults(options)
 
   const htmlToImagePromise = import('html-to-image')
   const logger = DebugLogger.create(options.debug)

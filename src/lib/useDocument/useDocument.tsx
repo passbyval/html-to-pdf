@@ -9,15 +9,16 @@ import {
   type ReactNode
 } from 'react'
 import { Document } from '../components/Document'
-import {
-  DEFAULT_MARGIN,
-  PAPER_DIMENSIONS,
-  type IMargin,
-  type IPaperFormat
-} from '../constants'
+import { DEFAULT_MARGIN } from '../constants'
 import { forceGarbageCollection } from '../utils/forceGarbageCollection'
 import { CONFIG } from '../config'
-import { create as createPdf, type ICreateOptions, Progress } from '../core'
+import {
+  create as createPdf,
+  type ICreateOptions,
+  Progress,
+  getDimensions,
+  getDefaults
+} from '../core'
 import { type ProcessingMetrics } from '../workers/types'
 import { pick } from '../utils/pick'
 
@@ -44,43 +45,27 @@ const getInitialState = (): Readonly<DocumentState> => ({
   pdfDataUri: ''
 })
 
-export const useDocument = ({
-  format = 'Letter',
-  margin = DEFAULT_MARGIN,
-  workspaceScale = 3.5,
-  autoPaginate = true,
-  debug = false,
-  ocrSettings = {
-    confidenceThreshold: CONFIG.OCR.CONFIDENCE_THRESHOLD,
-    pageSegMode: CONFIG.OCR.PAGE_SEG_MODE
-  },
-  onProgress,
-  onError,
-  ...props
-}: IUseDocumentOptions = {}) => {
+export const useDocument = (props: IUseDocumentOptions = {}) => {
   const ref = useRef<HTMLDivElement>(null)
   const workerRef = useRef<Worker | null>(null)
   const [state, setState] = useState<DocumentState>(getInitialState)
 
-  const dimensions = useMemo(() => {
-    const [WIDTH, HEIGHT] =
-      PAPER_DIMENSIONS[format?.toUpperCase() as Uppercase<IPaperFormat>]
+  const {
+    format,
+    margin,
+    workspaceScale,
+    autoPaginate,
+    debug,
+    ocrSettings,
+    onProgress,
+    onError
+  } = getDefaults(props)
 
-    const MARGIN_MAP: Record<IMargin, number> = Object.freeze({
-      Standard: DEFAULT_MARGIN,
-      Thin: DEFAULT_MARGIN / 2,
-      None: 0
-    })
-
-    const width = WIDTH / workspaceScale
-    const height = HEIGHT / workspaceScale
-
-    const padding =
-      (typeof margin === 'number' ? margin : MARGIN_MAP[margin]) /
-      workspaceScale
-
-    return Object.freeze({ width, height, padding })
-  }, [format, margin, workspaceScale])
+  const dimensions = getDimensions({
+    format,
+    margin,
+    workspaceScale
+  })
 
   const updateState = useCallback((updates: Partial<DocumentState>) => {
     setState((prevState) => ({
@@ -188,7 +173,10 @@ export const useDocument = ({
     () =>
       state.dataUri ? (
         <img
-          style={{ width: dimensions.width, height: dimensions.height }}
+          style={{
+            width: dimensions.width,
+            height: dimensions.height
+          }}
           src={state.dataUri}
           alt="Document preview"
           className="border border-gray-200 rounded-lg shadow-sm"
@@ -204,8 +192,8 @@ export const useDocument = ({
           {...props}
           ref={ref}
           margin={dimensions.padding}
-          width={dimensions.width}
-          height={dimensions.height}
+          width={dimensions.width ?? 0}
+          height={dimensions.height ?? 0}
         >
           {children}
         </Document>
