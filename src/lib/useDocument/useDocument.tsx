@@ -4,30 +4,70 @@ import {
   useMemo,
   useRef,
   useState,
+  useCallback,
+  useEffect,
   type PropsWithChildren,
   type ReactNode
 } from 'react'
-import { Document } from '../components/Document.tsx'
+import { Document } from '../components/Document'
 import {
   DEFAULT_MARGIN,
   PAPER_DIMENSIONS,
   type IMargin,
   type IPaperFormat
-} from '../constants.ts'
-import { chain } from '../utils/chain.ts'
-import { css } from '../utils/css.ts'
-import { makeStyleProps } from '../utils/makeStyleProps.ts'
-import { traverse } from '../utils/traverse.ts'
-import PdfWorker from '../workers/pdfWorker.ts?worker'
+} from '../constants'
+import { chain } from '../utils/chain'
+import { css } from '../utils/css'
+import { makeStyleProps } from '../utils/makeStyleProps'
+import { traverse } from '../utils/traverse'
+import { getTextNodes } from '../utils/getTextNodes'
+import { getUniqueCharsFromTextNodes } from '../utils/getUniqueCharsFromTextNodes'
+import { getUniqueWordsFromTextNodes } from '../utils/getUniqueWordsFromTextNodes'
+import { forceGarbageCollection } from '../utils/forceGarbageCollection'
+import { DebugLogger, type IDebugOptions } from '../DebugLogger'
+import { CONFIG } from '../config'
+import PdfWorker from '../workers/pdfWorker?worker'
+import type { OCRSettings } from '../config'
 import {
   Progress,
   type PdfWorkerInput,
-  type PdfWorkerOutput
-} from '../workers/types.ts'
-import { getTextNodes } from '../utils/getTextNodes.ts'
-import { getUniqueCharsFromTextNodes } from '../utils/getUniqueCharsFromTextNodes.ts'
-import { getUniqueWordsFromTextNodes } from '../utils/getUniqueWordsFromTextNodes.ts'
-import type { IDownload, IUseDocumentOptions } from './types.ts'
+  type ProcessingMetrics,
+  type IDownloadOptions
+} from '../workers/types'
+import { pick } from '../utils/pick'
+
+interface IUseDocumentOptions {
+  readonly format?: IPaperFormat
+  readonly margin?: IMargin | number
+  readonly workspaceScale?: number
+  readonly autoPaginate?: boolean
+  readonly debug?: IDebugOptions
+  readonly ocrSettings?: OCRSettings
+  readonly enableAnalytics?: boolean
+  readonly onProgress?: (metrics: ProcessingMetrics) => void
+  readonly onError?: (error: Error) => void
+}
+
+interface DocumentState {
+  readonly isCreating: boolean
+  readonly progress: number
+  readonly stage?: string
+  readonly stageDescription?: string
+  readonly eta?: number
+  readonly pageNumber?: number
+  readonly totalPages?: number
+  readonly dataUri: string
+  readonly pdfDataUri: string
+  readonly metrics?: ProcessingMetrics
+  readonly error?: string
+}
+
+const getInitialState = (): Readonly<DocumentState> => ({
+  isCreating: false,
+  progress: 0,
+  dataUri: '',
+  pdfDataUri: ''
+})
 
 export const useDocument = ({
   format = 'Letter',
@@ -36,133 +76,90 @@ export const useDocument = ({
   autoPaginate = true,
   debug = false,
   ocrSettings = {
-    confidenceThreshold: 30
+    confidenceThreshold: CONFIG.OCR.CONFIDENCE_THRESHOLD,
+    pageSegMode: CONFIG.OCR.PAGE_SEG_MODE,
+    enableAnalytics: false
   },
+  enableAnalytics = false,
+  onProgress,
+  onError,
   ...props
 }: IUseDocumentOptions = {}) => {
   const ref = useRef<HTMLDivElement>(null)
+  const workerRef = useRef<Worker | null>(null)
+  const [state, setState] = useState<DocumentState>(getInitialState)
 
-  const [isCreating, setIsCreating] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [dataUri, setDataUri] = useState('')
-  const [pdfDataUri, setPdfDataUri] = useState('')
+  const logger = useMemo(() => DebugLogger.create(debug), [debug])
 
-  const updateProgress = (progress: number) => {
-    const percent = Math.round(progress * 10000) / 100
-    setProgress(Math.min(100, percent))
-  }
+  const dimensions = useMemo(() => {
+    const [WIDTH, HEIGHT] =
+      PAPER_DIMENSIONS[format?.toUpperCase() as Uppercase<IPaperFormat>]
 
-  const [WIDTH, HEIGHT] =
-    PAPER_DIMENSIONS[format?.toUpperCase() as Uppercase<IPaperFormat>]
+    const MARGIN_MAP: Record<IMargin, number> = Object.freeze({
+      Standard: DEFAULT_MARGIN,
+      Thin: DEFAULT_MARGIN / 2,
+      None: 0
+    })
 
-  const MARGIN_MAP: Record<IMargin, number> = {
-    Standard: DEFAULT_MARGIN,
-    Thin: DEFAULT_MARGIN / 2,
-    None: 0
-  }
+    const width = WIDTH / workspaceScale
+    const height = HEIGHT / workspaceScale
 
-  const width = WIDTH / workspaceScale
-  const height = HEIGHT / workspaceScale
+    const padding =
+      (typeof margin === 'number' ? margin : MARGIN_MAP[margin]) /
+      workspaceScale
 
-  const padding =
-    (typeof margin === 'number' ? margin : MARGIN_MAP[margin]) / workspaceScale
+    return Object.freeze({ width, height, padding })
+  }, [format, margin, workspaceScale])
 
   const htmlToImage = useMemo(() => (async () => import('html-to-image'))(), [])
 
-  const create = (): Promise<{
-    download: IDownload
-    message?: string
-  }> => {
-    setIsCreating(true)
-    setProgress(0)
+  const updateState = useCallback((updates: Partial<DocumentState>) => {
+    setState((prevState) => ({
+      ...prevState,
+      ...updates
+    }))
+  }, [])
 
-    return new Promise(async (resolve) => {
-      if (!ref.current) return Promise.resolve({ download: () => () => void 0 })
+  const handleError = useCallback(
+    (error: Error | string) => {
+      const errorMessage = error instanceof Error ? error.message : error
+      logger.error('Document generation error:', errorMessage)
 
-      if (!(ref.current instanceof HTMLElement)) {
-        const current = (ref.current as unknown)!
-        const instanceType = current.constructor.name
+      updateState({
+        isCreating: false,
+        progress: 0,
+        error: errorMessage
+      })
 
-        return Promise.reject({
-          download: () => () => void 0,
-          message: `Invalid element provided. Expected type of HTMLElement, got ${instanceType}.`
-        })
-      }
+      onError?.(error instanceof Error ? error : new Error(errorMessage))
+    },
+    [onError, updateState, logger]
+  )
 
-      const pdfWorker = new PdfWorker()
-      const clonedNode = ref.current.cloneNode(true) as HTMLElement
+  const cleanup = useCallback(() => {
+    if (workerRef.current) {
+      workerRef.current.terminate()
+      workerRef.current = null
+    }
 
-      const { scrollHeight } = ref.current
-      const trueHeight = Math.max(height, scrollHeight)
+    if (state.pdfDataUri) {
+      URL.revokeObjectURL(state.pdfDataUri)
+    }
 
-      clonedNode.style.cssText = css`
-        padding: ${padding}px;
-        min-height: ${trueHeight}px;
-        width: ${width}px;
-        margin: 0px;
-        border: none;
-        overflow: visible;
-        font-smooth: antialiased;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        transform: translateZ(0);
-        will-change: transform;
-        backface-visibility: hidden;
-        text-rendering: optimizeLegibility;
-        image-rendering: crisp-edges;
-      `
+    forceGarbageCollection()
+  }, [state.pdfDataUri])
 
-      document.body.appendChild(clonedNode)
+  useEffect(() => {
+    return cleanup
+  }, [cleanup])
 
-      for (const node of traverse(clonedNode)) {
-        const style = getComputedStyle(node)
+  const processOCRReplacements = useCallback(
+    (clonedNode: HTMLElement) => {
+      logger.debug('Processing OCR replacements')
 
-        const layoutAffectors = makeStyleProps([
-          'left',
-          'top',
-          'width',
-          'height',
-          'fontSize',
-          'lineHeight'
-        ])
-
-        const overflow = makeStyleProps(['overflow', 'overflowX', 'overflowY'])
-
-        overflow.forEach((property) => {
-          const value = style[property]
-
-          if (typeof value === 'string' && ['scroll', 'auto'].includes(value)) {
-            node.style[property] = 'hidden'
-          }
-        })
-
-        layoutAffectors.forEach((property) => {
-          const value = style[property]
-          const num = parseFloat(value)
-
-          if (!isNaN(num)) {
-            node.style.setProperty(property, `${Math.round(num)}px`)
-          }
-        })
-      }
-
-      const TO_CANVAS_OPTIONS: Options = {
-        backgroundColor: 'white',
-        quality: 1,
-        pixelRatio: workspaceScale,
-        width,
-        canvasWidth: width
-      }
-
-      const [{ toCanvas }, canvas] = await chain(
-        async () => htmlToImage,
-        async ({ toCanvas }) => toCanvas(clonedNode, TO_CANVAS_OPTIONS),
-        (canvas) => setDataUri(canvas.toDataURL())
-      )
-
-      const userDefinedReplacements = Array.from(
-        clonedNode.querySelectorAll('[data-ocr]')
-      )?.reduce<string[]>((acc, node) => {
+      return Array.from(clonedNode.querySelectorAll('[data-ocr]')).reduce<
+        readonly string[]
+      >((acc, node) => {
         const value = node.getAttribute('data-ocr')
 
         if (!(node instanceof HTMLElement) || !value) return acc
@@ -174,188 +171,417 @@ export const useDocument = ({
 
         const { height, width } = node.getBoundingClientRect()
 
-        const [x, y] = ['data-ocr-x', 'data-ocr-y'].map(
+        const [x, y] = (['data-ocr-x', 'data-ocr-y'] as const).map(
           (attr) => parseFloat(node.getAttribute(attr) ?? '') || 0
         )
 
         const style = getComputedStyle(node)
-        const fontSize = Math.max(height, parseFloat(style.fontSize))
+        const fontSize = Math.max(height, parseFloat(style.fontSize), 32)
 
-        const ocrElement = document.createElement('div')
-        const textSpan = document.createElement('span')
+        const svg = document.createElementNS(
+          'http://www.w3.org/2000/svg',
+          'svg'
+        )
 
-        ocrElement.style.cssText = css`
+        const svgText = document.createElementNS(
+          'http://www.w3.org/2000/svg',
+          'text'
+        )
+
+        const offsetWidth = width - x
+
+        svg.style.cssText = css`
           display: inline-block;
           position: relative;
           margin-top: ${y}px;
           margin-left: ${x}px;
-          width: ${width}px;
+          width: ${offsetWidth}px;
           height: ${height}px;
-          background: #fff;
-          line-height: 1;
-          white-space: nowrap;
         `
 
-        textSpan.textContent = value
+        svg.appendChild(svgText)
+        svgText.innerHTML = value
 
-        textSpan.style.cssText = css`
+        svgText.style.cssText = css`
           background: #fff;
           color: #000;
-          letter-spacing: 3px;
-          font-family: 'Georgia', serif;
-          font-weight: 400;
-          font-size: ${Math.max(fontSize, 48)}px;
-          line-height: 1;
+          font-family: Consolas, 'Courier New', monospace;
+          font-weight: 600;
           text-rendering: geometricPrecision;
           -webkit-font-smoothing: none;
           font-smooth: never;
-          display: inline-block;
-          border: 1px solid transparent;
-          vertical-align: baseline;
+          border: 1px solid ${fontSize > 25 ? 'black' : 'transparent'};
+          text-shadow: none;
         `
 
-        const attributes = Array.from(node.attributes)
-        attributes.forEach((attr) => {
+        Array.from(node.attributes).forEach((attr) => {
           if (attr.name.startsWith('data-')) {
             const clonedAttr = attr.cloneNode(true)
-
             if (clonedAttr instanceof Attr) {
-              ocrElement.setAttributeNode(clonedAttr)
+              svg.setAttributeNode(clonedAttr)
             }
           }
         })
 
-        ocrElement.appendChild(textSpan)
-        node.replaceWith(ocrElement)
+        node.replaceWith(svg)
 
-        return acc.includes(value) ? acc : [...acc, value]
-      }, [])
+        const bbox = svgText.getBBox()
 
-      const textNodes = getTextNodes(clonedNode, canvas)
-      const charWhiteList = getUniqueCharsFromTextNodes(textNodes).join('')
-
-      const customWords = getUniqueWordsFromTextNodes(textNodes, [
-        ...userDefinedReplacements,
-        'Cl0udCats'
-      ])
-        .filter((w) => w !== 'CloudCats')
-        .join('\n')
-
-      const ocrCanvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
-
-      document.body.removeChild(clonedNode)
-
-      const [bitmap, ocrBitmap] = await Promise.all(
-        [canvas, ocrCanvas].map((c) =>
-          createImageBitmap(c, {
-            resizeQuality: 'high'
-          })
+        svg.setAttribute(
+          'viewBox',
+          [bbox.x, bbox.y, bbox.width, bbox.height].join(' ')
         )
-      )
 
-      const input: PdfWorkerInput = {
-        options: {
-          height,
-          width,
-          margin: padding,
-          pageHeight: height * workspaceScale,
-          workspaceScale,
-          bitmap,
-          ocrBitmap,
-          autoPaginate,
-          customWords,
-          charWhiteList,
-          ocrSettings
+        logger.verbose('OCR replacement processed', {
+          value,
+          fontSize: Math.round(fontSize),
+          dimensions: `${Math.round(width)}x${Math.round(height)}`
+        })
+
+        return acc.includes(value) ? acc : Object.freeze([...acc, value])
+      }, [])
+    },
+    [logger]
+  )
+
+  const create = useCallback((): Promise<{
+    readonly download: (options?: IDownloadOptions) => () => void
+    readonly message?: string
+  }> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        logger.info('Starting document creation')
+
+        updateState({
+          isCreating: true,
+          progress: 0,
+          error: undefined
+        })
+
+        if (!ref.current) {
+          throw new Error('Document reference not available')
         }
-      }
 
-      pdfWorker.postMessage(input, [bitmap, ocrBitmap])
+        if (!(ref.current instanceof HTMLElement)) {
+          const current = (ref.current as unknown)!
+          const instanceType = current.constructor.name
 
-      pdfWorker.onmessage = (e: MessageEvent<PdfWorkerOutput>) => {
-        const { type, message, pdfBuffer } = e.data
-
-        if (type === Progress.Pending) {
-          return updateProgress(e.data.progress ?? 0)
+          throw new Error(
+            `Invalid element type: expected HTMLElement, got ${instanceType}`
+          )
         }
 
-        if (type === Progress.Done) {
-          pdfWorker.terminate()
+        workerRef.current = new PdfWorker()
 
-          setIsCreating(false)
-          setProgress(100)
+        const clonedNode = ref.current.cloneNode(true) as HTMLElement
 
-          const blob = new Blob([pdfBuffer!], { type: 'application/pdf' })
-          const url = URL.createObjectURL(blob)
+        const { width, height, padding } = dimensions
+        const { scrollHeight } = ref.current
 
-          setPdfDataUri(url)
+        const trueHeight = Math.max(height, scrollHeight)
 
-          return resolve({
-            download: (options) => {
-              if (options?.type === 'direct') {
-                const anchor = document.createElement('a')
+        logger.debug('Preparing document layout', {
+          dimensions: `${Math.round(width)}x${Math.round(height)}`,
+          padding: Math.round(padding),
+          scrollHeight: Math.round(scrollHeight),
+          trueHeight: Math.round(trueHeight)
+        })
 
-                ;[
-                  ['href', url],
-                  ['target', '_blank'],
-                  ['rel', 'noopener noreferrer'],
-                  ['download', 'document.pdf']
-                ].forEach(([key, value]) => anchor.setAttribute(key, value))
+        clonedNode.style.cssText = css`
+          padding: ${padding}px;
+          min-height: ${trueHeight}px;
+          width: ${width}px;
+          margin: 0px;
+          border: none;
+          overflow: visible;
+          font-smooth: antialiased;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+          transform: translateZ(0);
+          backface-visibility: hidden;
+          text-rendering: optimizeLegibility;
+          image-rendering: crisp-edges;
+        `
 
-                anchor.click()
-                document.removeChild(anchor)
+        document.body.appendChild(clonedNode)
 
-                return () => void 0
-              }
+        logger.debug('Processing DOM nodes for layout optimization')
+        for (const node of traverse(clonedNode)) {
+          const style = getComputedStyle(node)
 
-              window.open(url, '_blank')
+          const layoutAffectors = makeStyleProps([
+            'left',
+            'top',
+            'width',
+            'height',
+            'fontSize',
+            'lineHeight'
+          ])
 
-              return () => URL.revokeObjectURL(url)
+          const overflow = makeStyleProps([
+            'overflow',
+            'overflowX',
+            'overflowY'
+          ])
+
+          overflow.forEach((property) => {
+            const value = style[property]
+
+            if (
+              typeof value === 'string' &&
+              ['scroll', 'auto'].includes(value)
+            ) {
+              node.style[property] = 'hidden'
+            }
+          })
+
+          layoutAffectors.forEach((property) => {
+            const value = style[property]
+            const num = parseFloat(value)
+
+            if (!isNaN(num)) {
+              node.style.setProperty(property, `${Math.round(num)}px`)
             }
           })
         }
 
-        if (type === Progress.Error) {
-          setIsCreating(false)
-          setProgress(0)
-          console.error('Worker error:', message)
+        const TO_CANVAS_OPTIONS: Options = Object.freeze({
+          backgroundColor: 'white',
+          quality: CONFIG.PDF.IMAGE_QUALITY,
+          pixelRatio: workspaceScale,
+          width,
+          canvasWidth: width
+        })
+
+        logger.debug('Converting HTML to canvas')
+        const [{ toCanvas }, canvas] = await chain(
+          async () => htmlToImage,
+          async ({ toCanvas }) => toCanvas(clonedNode, TO_CANVAS_OPTIONS),
+          (canvas) => updateState({ dataUri: canvas.toDataURL() })
+        )
+
+        const userDefinedReplacements = processOCRReplacements(clonedNode)
+        const textNodes = getTextNodes(clonedNode, canvas)
+        const charWhiteList = getUniqueCharsFromTextNodes(textNodes).join('')
+
+        const customWords = getUniqueWordsFromTextNodes(
+          textNodes,
+          userDefinedReplacements
+        ).join('\n')
+
+        logger.info('Text analysis completed', {
+          textNodes: textNodes.length,
+          uniqueChars: charWhiteList.length,
+          customWords: customWords.split('\n').length,
+          userReplacements: userDefinedReplacements.length
+        })
+
+        const ocrCanvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
+
+        if (
+          debug === 'debug' ||
+          (Array.isArray(debug) && debug.includes('debug'))
+        ) {
+          ocrCanvas.toBlob((blob) => {
+            if (blob) {
+              const url = URL.createObjectURL(blob)
+              window.open(url, '_blank', 'width=800,height=600')
+            }
+          })
         }
+
+        document.body.removeChild(clonedNode)
+
+        const [bitmap, ocrBitmap] = await Promise.all(
+          [canvas, ocrCanvas].map((canvas) =>
+            createImageBitmap(canvas, {
+              resizeQuality: 'high'
+            })
+          )
+        )
+
+        const input: PdfWorkerInput = Object.freeze({
+          options: Object.freeze({
+            height,
+            width,
+            margin: padding,
+            pageHeight: height * workspaceScale,
+            workspaceScale,
+            bitmap,
+            ocrBitmap,
+            autoPaginate,
+            customWords,
+            charWhiteList,
+            debug,
+            ocrSettings: Object.freeze({
+              ...ocrSettings,
+              enableAnalytics
+            })
+          })
+        })
+
+        logger.debug('Sending work to PDF worker')
+        workerRef.current.postMessage(input, [bitmap, ocrBitmap])
+
+        workerRef.current.onmessage = ({ data: message }) => {
+          switch (message.type) {
+            case Progress.Pending:
+              if (message.metrics && onProgress) {
+                onProgress(message.metrics)
+              }
+
+              return updateState({
+                stage: message.stage,
+                stageDescription: message.stageDescription,
+                progress: message.progress * 100 || 0,
+                eta: message.eta,
+                pageNumber: message.pageNumber,
+                totalPages: message.totalPages,
+                metrics: message.metrics
+              })
+
+            case Progress.Done:
+              if (message.metrics && onProgress) {
+                onProgress(message.metrics)
+              }
+
+              const blob = new Blob([message.pdfBuffer!], {
+                type: 'application/pdf'
+              })
+
+              const url = URL.createObjectURL(blob)
+
+              updateState({
+                isCreating: false,
+                progress: 100,
+                pdfDataUri: url,
+                metrics: message.metrics
+              })
+
+              logger.info('PDF generation completed successfully')
+
+              const download = (options: IDownloadOptions = {}) => {
+                const config = Object.freeze({
+                  type: 'window' as const,
+                  filename: 'document.pdf',
+                  ...options
+                })
+
+                if (config.type === 'direct') {
+                  const anchor = document.createElement('a')
+
+                  const attributes: readonly [string, string][] = Object.freeze(
+                    [
+                      ['href', url],
+                      ['target', '_blank'],
+                      ['rel', 'noopener noreferrer'],
+                      ['download', config.filename]
+                    ]
+                  )
+
+                  attributes.forEach(([key, value]) =>
+                    anchor.setAttribute(key, value)
+                  )
+
+                  anchor.click()
+                  return () => void 0
+                }
+
+                window.open(url, '_blank')
+                return () => URL.revokeObjectURL(url)
+              }
+
+              return resolve(
+                Object.freeze({
+                  download
+                })
+              )
+
+            case Progress.Error:
+              return handleError(message.message || 'Unknown worker error')
+          }
+        }
+      } catch (error) {
+        handleError(error as Error)
+        reject(error)
       }
     })
-  }
+  }, [
+    updateState,
+    dimensions,
+    handleError,
+    processOCRReplacements,
+    htmlToImage,
+    workspaceScale,
+    autoPaginate,
+    ocrSettings,
+    enableAnalytics,
+    debug,
+    state.pdfDataUri,
+    logger
+  ])
 
-  const Viewer = ({ fallback }: { fallback?: ReactNode }) =>
-    pdfDataUri ? (
-      <object
-        height={height}
-        width={width}
-        data={pdfDataUri}
-        type="application/pdf"
-      >
-        {fallback}
-      </object>
-    ) : null
+  const Viewer = useCallback(
+    ({
+      fallback
+    }: {
+      readonly fallback?: ReactNode
+    } = {}) =>
+      state.pdfDataUri ? (
+        <object
+          height={dimensions.height}
+          width={dimensions.width}
+          data={state.pdfDataUri}
+          type="application/pdf"
+          className="border border-gray-200 rounded-lg shadow-sm"
+        >
+          {fallback}
+        </object>
+      ) : null,
+    [state.pdfDataUri, dimensions]
+  )
 
-  const PreviewImage = () =>
-    dataUri ? <img style={{ width, height }} src={dataUri} /> : null
+  const PreviewImage = useCallback(
+    () =>
+      state.dataUri ? (
+        <img
+          style={{ width: dimensions.width, height: dimensions.height }}
+          src={state.dataUri}
+          alt="Document preview"
+          className="border border-gray-200 rounded-lg shadow-sm"
+        />
+      ) : null,
+    [state.dataUri, dimensions]
+  )
 
-  const RefDocument = memo(({ children }: PropsWithChildren) => (
-    <Document
-      {...props}
-      ref={ref}
-      margin={padding}
-      width={width}
-      height={height}
-    >
-      {children}
-    </Document>
-  ))
+  const RefDocument = useMemo(
+    () =>
+      memo(({ children }: PropsWithChildren) => (
+        <Document
+          {...props}
+          ref={ref}
+          margin={dimensions.padding}
+          width={dimensions.width}
+          height={dimensions.height}
+        >
+          {children}
+        </Document>
+      )),
+    [props, dimensions]
+  )
 
-  return {
+  return Object.freeze({
     Document: RefDocument,
-    create,
     Viewer,
     PreviewImage,
-    isCreating,
-    progress
-  }
+
+    create,
+    cleanup,
+
+    ...Object.freeze(state),
+    dimensions: Object.freeze(dimensions),
+    isProcessing: state.isCreating && state.progress > 0,
+    isCompleted: !state.isCreating && state.progress === 100,
+    hasError: Boolean(state.error)
+  })
 }

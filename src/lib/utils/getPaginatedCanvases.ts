@@ -1,5 +1,6 @@
 import { cropCanvas } from './cropCanvas'
 import type { Worker } from 'tesseract.js'
+import { DebugLogger, type IDebugOptions } from '../DebugLogger'
 
 interface LineBox {
   top: number
@@ -12,17 +13,31 @@ export async function getPaginatedCanvases(
   {
     pageHeight,
     margin,
-    worker
+    worker,
+    debug = 'none'
   }: {
     pageHeight: number
     margin: number
     worker: Worker
+    debug?: IDebugOptions
   }
 ): Promise<[OffscreenCanvas, OffscreenCanvas][]> {
+  const startTime = Date.now()
+  const logger = DebugLogger.create(debug)
+
   const totalHeight = canvas.height
   const firstPageHeight = pageHeight - margin
   const subsequentPageHeight = pageHeight - margin * 2
 
+  logger.info('Analyzing canvas for pagination', {
+    canvasSize: `${canvas.width}x${totalHeight}`,
+    pageHeight: `${pageHeight}px`,
+    margin: `${margin}px`,
+    firstPageHeight: `${firstPageHeight}px`,
+    subsequentPageHeight: `${subsequentPageHeight}px`
+  })
+
+  logger.debug('Performing OCR analysis for line detection')
   const { data } = await worker.recognize(ocrCanvas, {}, { blocks: true })
 
   const allLines: LineBox[] = (data.blocks ?? []).flatMap((block) =>
@@ -34,6 +49,18 @@ export async function getPaginatedCanvases(
       }))
     )
   )
+
+  logger.debug('Line detection completed', {
+    blocksFound: data.blocks?.length || 0,
+    linesFound: allLines.length,
+    averageConfidence:
+      allLines.length > 0
+        ? Math.round(
+            allLines.reduce((sum, line) => sum + line.confidence, 0) /
+              allLines.length
+          )
+        : 0
+  })
 
   const cutPoints = allLines.reduce<number[]>((acc, _, i) => {
     if (i === 0) return [0]
@@ -53,22 +80,55 @@ export async function getPaginatedCanvases(
 
     const safeCut = lineAtCut ? lineAtCut.bottom : proposedCut
 
-    // Avoid duplicate cuts
+    if (lineAtCut) {
+      logger.verbose('Adjusted cut point to avoid splitting line', {
+        proposedCut: Math.round(proposedCut),
+        adjustedCut: Math.round(safeCut),
+        lineConfidence: Math.round(lineAtCut.confidence)
+      })
+    }
+
     return safeCut === previousCut ? acc : [...acc, safeCut]
   }, [])
 
+  logger.info('Page cuts calculated', {
+    totalPages: cutPoints.length - 1,
+    cuts: cutPoints.map((cut) => `${Math.round(cut)}px`).join(', '),
+    analysisTime: `${Date.now() - startTime}ms`
+  })
+
+  logger.debug('Cropping canvases into pages')
   const results = cutPoints.slice(1).map((cut, i) => {
     const startY = cutPoints[i]
     const height = cut - startY
     const isFirstPage = i === 0
+
+    logger.verbose(`Creating page ${i + 1}`, {
+      startY: Math.round(startY),
+      height: Math.round(height),
+      isFirstPage,
+      pageSize: `${canvas.width}x${Math.round(height)}`
+    })
 
     return cropCanvas([canvas, ocrCanvas], {
       y: startY,
       height,
       margin,
       isFirstPage,
-      pageHeight
+      pageHeight,
+      debug
     }) as [OffscreenCanvas, OffscreenCanvas]
+  })
+
+  const paginationTime = Date.now() - startTime
+
+  logger.info('Canvas pagination completed', {
+    pages: results.length,
+    duration: `${paginationTime}ms`,
+    avgPageHeight:
+      results.length > 0
+        ? `${Math.round(results.reduce((sum, [canvas]) => sum + canvas.height, 0) / results.length)}px`
+        : 'N/A'
   })
 
   return results

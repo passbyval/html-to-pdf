@@ -2,8 +2,8 @@ import type { ITextNode } from './getTextNodes'
 
 export function getUniqueWordsFromTextNodes(
   textNodes: ITextNode[],
-  additionalWords: string[] = []
-): string[] {
+  additionalWords: readonly string[] = []
+) {
   const wordSet = new Set<string>()
 
   for (const node of textNodes) {
@@ -19,5 +19,5 @@ export function getUniqueWordsFromTextNodes(
     }
   }
 
-  return Array.from(wordSet).sort()
+  return Object.freeze(Array.from(wordSet).sort())
 }

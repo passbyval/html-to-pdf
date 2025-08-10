@@ -1,4 +1,5 @@
 import type jsPDF from 'jspdf'
+import { DebugLogger, type IDebugOptions } from '../DebugLogger'
 
 export function drawOcrWord(
   doc: jsPDF,
@@ -6,36 +7,78 @@ export function drawOcrWord(
   fontSize: number,
   ratio: number,
   options: {
-    debug?: boolean
+    debug?: IDebugOptions
+    logger?: DebugLogger
   } = {}
-) {
-  if (!line.words) return
+): void {
+  const { debug = false, logger } = options
 
-  const { debug = true } = options
+  if (!line.words) {
+    logger?.verbose('No words found in line', { lineText: line.text })
+    return
+  }
+
+  logger?.debug(`Processing line with ${line.words.length} words`, {
+    lineText: line.text,
+    confidence: line.confidence,
+    fontSize,
+    ratio
+  })
 
   doc.setFontSize(fontSize)
 
-  for (const word of line.words) {
-    const { text, bbox } = word
+  const wordProcessingResults = line.words.map((word) => {
+    const { text, bbox, confidence } = word
 
-    const x = bbox.x0 * ratio
-    const y0 = line.baseline.y0 * ratio
-    const y1 = line.baseline.y1 * ratio
-    const y = (y0 + y1) / 2
-
-    const wordWidth = (bbox.x1 - bbox.x0) * ratio
-    const jspdfWidth = doc.getTextWidth(text)
-
-    const charCount = text.length - 1
-    const charSpace = charCount > 0 ? (wordWidth - jspdfWidth) / charCount : 0
-
-    doc.text(text, x, y, {
-      charSpace
+    logger?.verbose(`Processing word: "${text}"`, {
+      confidence,
+      x0: bbox.x0,
+      y0: bbox.y0,
+      x1: bbox.x1,
+      y1: bbox.y1,
+      width: bbox.x1 - bbox.x0,
+      height: bbox.y1 - bbox.y0
     })
 
-    if (debug) {
+    const calculations = {
+      x: bbox.x0 * ratio,
+      y0: line.baseline.y0 * ratio,
+      y1: line.baseline.y1 * ratio,
+      wordWidth: (bbox.x1 - bbox.x0) * ratio,
+      jspdfWidth: doc.getTextWidth(text),
+      charCount: text.length - 1
+    }
+
+    const positioning = {
+      ...calculations,
+      y: (calculations.y0 + calculations.y1) / 2,
+      charSpace:
+        calculations.charCount > 0
+          ? (calculations.wordWidth - calculations.jspdfWidth) /
+            calculations.charCount
+          : 0
+    }
+
+    logger?.verbose('Word positioning calculated', {
+      word: text,
+      x: Math.round(positioning.x),
+      y: Math.round(positioning.y),
+      wordWidth: Math.round(positioning.wordWidth),
+      jspdfWidth: Math.round(positioning.jspdfWidth),
+      charSpace: Math.round(positioning.charSpace * 100) / 100,
+      charCount: calculations.charCount
+    })
+
+    doc.text(text, positioning.x, positioning.y, {
+      charSpace: positioning.charSpace
+    })
+
+    if (Array.isArray(debug) && debug.includes('debug')) {
+      logger?.debug(`Drawing debug rectangle for word: "${text}"`)
+
       doc.setDrawColor(255, 0, 0)
       doc.setLineWidth(0.25)
+
       doc.rect(
         bbox.x0 * ratio,
         bbox.y0 * ratio,
@@ -43,5 +86,30 @@ export function drawOcrWord(
         (bbox.y1 - bbox.y0) * ratio
       )
     }
-  }
+
+    return {
+      word: text,
+      charSpace: positioning.charSpace,
+      confidence,
+      processed: true
+    }
+  })
+
+  const summary = wordProcessingResults.reduce(
+    (acc, result) => ({
+      processedWords: acc.processedWords + (result.processed ? 1 : 0),
+      totalCharSpace: acc.totalCharSpace + result.charSpace
+    }),
+    { processedWords: 0, totalCharSpace: 0 }
+  )
+
+  logger?.info('Line processing completed', {
+    wordsProcessed: summary.processedWords,
+    averageCharSpace:
+      summary.processedWords > 0
+        ? summary.totalCharSpace / summary.processedWords
+        : 0,
+    lineConfidence: line.confidence,
+    fontSize
+  })
 }

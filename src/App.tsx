@@ -11,14 +11,13 @@ import {
   TableRow
 } from '@/components/ui/table'
 import { faker } from '@faker-js/faker'
-import { useEffect, type ComponentProps, type PropsWithChildren } from 'react'
+import { type ComponentProps, type PropsWithChildren } from 'react'
 import { AnimatedPercentage } from './components/AnimatedPercentage'
 import { Button } from './components/ui/button'
 import { Box } from './lib/components/Box'
 import { useDocument } from './lib/useDocument'
 import { DocumentHeader } from './lib/components/DocumentHeader'
 import { times } from './utils/times'
-import { css } from './lib/utils/css'
 
 interface ITableData {
   accountNumber: string
@@ -56,7 +55,9 @@ const data2: ITableData[] = JSON.parse(
 
 function App() {
   const { Document, create, Viewer, PreviewImage, isCreating, progress } =
-    useDocument()
+    useDocument({
+      debug: 'all'
+    })
 
   const onClick = async () => {
     const { download } = await create()
@@ -82,8 +83,7 @@ function App() {
           <DocumentHeader as={Header}>
             <img
               data-ocr="Logoipsum"
-              data-ocr-x="50"
-              data-ocr-y="-10"
+              data-ocr-x="75"
               src={logo}
               loading="lazy"
               className="w-[300px] mb-6"
