@@ -76,8 +76,6 @@ export interface ProcessingOptions {
   readonly confidenceThreshold: number
   readonly pageSegMode: string
   readonly engineMode: string
-  readonly enableRetry: boolean
-  readonly enableAnalytics: boolean
   readonly batchSize: number
 }
 

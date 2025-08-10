@@ -2,7 +2,6 @@ import type { IDocumentProps } from '../components/Document'
 
 export interface IOcrSettings {
   confidenceThreshold: number
-  enableAnalytics?: boolean
 }
 
 export interface IUseDocumentOptions

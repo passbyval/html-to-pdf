@@ -166,20 +166,6 @@ export interface OCRSettings {
    * @see CONFIG.OCR.ENGINE_MODE
    */
   readonly engineMode?: string
-
-  /**
-   * Additional custom words to add to Tesseract's dictionary
-   * These words will be recognized with higher priority
-   * @example ["Logoipsum", "CustomBrand", "SpecialTerm"]
-   */
-  readonly customWords?: readonly string[]
-
-  /**
-   * Enable collection of detailed OCR analytics and metrics
-   * Includes processing time, confidence scores, and accuracy data
-   * @default false
-   */
-  readonly enableAnalytics?: boolean
 }
 
 /**
