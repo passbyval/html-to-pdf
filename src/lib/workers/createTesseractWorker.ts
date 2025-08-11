@@ -1,6 +1,6 @@
 import { createWorker, type WorkerParams, type InitOptions } from 'tesseract.js'
 import { OCR_PARAMS } from '../constants'
-import { DebugLogger, type IDebugOptions } from '../DebugLogger'
+import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 const DATA_CLONE_ERROR_PREFIX = 'DataCloneError'
 const TESSDATA_DIR = '/tessdata'
@@ -15,7 +15,7 @@ export const createTesseractWorker = async (
   customWords: string,
   tessedit_char_whitelist: string,
   lang: string = 'eng',
-  debug: IDebugOptions = 'none'
+  debug: LogLevel[] = []
 ) => {
   const startTime = Date.now()
   const logger = DebugLogger.create(debug)

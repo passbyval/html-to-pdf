@@ -1,20 +1,18 @@
 import { css } from './utils/css'
+import { guard } from './guard'
 
 export type LogLevel = 'verbose' | 'debug' | 'info' | 'warn' | 'error'
+export type LoggerEnvironment = 'browser' | 'worker'
 
-export type IDebugOptions = LogLevel[] | 'all' | 'none' | false
-export type ILoggerEnvironment = 'browser' | 'worker'
-
-export interface ProcessingMetrics {
+export interface ProcessingMetrics extends Record<string, any> {
   stage: string
   duration: number
   timestamp: number
   level: LogLevel
   memory?: number
-  [key: string]: any
 }
 
-interface LogConfig {
+interface LogLevelConfig {
   emoji: string
   color: string
   prefix: string
@@ -27,7 +25,7 @@ interface ConsoleOutput {
   styles: string[]
 }
 
-const LOG_CONFIGS: Record<LogLevel, LogConfig> = {
+const LOG_CONFIGS: Record<LogLevel, LogLevelConfig> = {
   verbose: {
     emoji: '🔍',
     color: '#DDA0DD',
@@ -84,183 +82,134 @@ const TYPE_COLORS = {
 
 type ValueType = keyof typeof TYPE_COLORS
 
-// Define log level hierarchy for verbose mode
-const LOG_LEVEL_HIERARCHY: Record<LogLevel, number> = {
-  verbose: 0,
-  debug: 1,
-  info: 2,
-  warn: 3,
-  error: 4
+export const LOG_LEVELS: LogLevel[] = [
+  'verbose',
+  'debug',
+  'info',
+  'warn',
+  'error'
+]
+
+const LOG_LEVEL_HIERARCHY: Record<LogLevel, LogLevel[]> = {
+  verbose: ['verbose', 'debug', 'info', 'warn', 'error'],
+  debug: ['debug', 'info', 'warn', 'error'],
+  info: ['info', 'warn', 'error'],
+  warn: ['warn', 'error'],
+  error: ['error']
 } as const
 
 class DebugLogger {
-  private readonly enabledModes: Set<LogLevel>
+  private readonly enabledLevels: Set<LogLevel>
   private readonly startTime = Date.now()
-  private readonly metricsData: ProcessingMetrics[] = []
-  private readonly maxHistorySize = 1000
 
   private logCount = 0
-  private environment: ILoggerEnvironment = 'browser'
+  private environment: LoggerEnvironment = 'browser'
+  private groupDepth = 0 // Track group nesting depth
 
   constructor(
-    debugOptions: IDebugOptions = ['warn', 'error'], // Default to warn and error
-    environment?: ILoggerEnvironment
+    logConfig: LogLevel[] = ['warn', 'error'], // Default to warn and error
+    environment?: LoggerEnvironment
   ) {
-    this.enabledModes = this.parseDebugOptions(debugOptions)
-    this.printWelcomeMessage()
+    this.enabledLevels = this.parseLogConfig(logConfig)
 
     if (environment) {
       this.environment = environment
     }
   }
 
+  @guard
   verbose(message: string, data?: any) {
     this.log('verbose', message, data)
   }
 
+  @guard
   debug(message: string, data?: any) {
     this.log('debug', message, data)
   }
 
+  @guard
   info(message: string, data?: any) {
     this.log('info', message, data)
   }
 
+  @guard
   warn(message: string, data?: any) {
     this.log('warn', message, data)
   }
 
+  @guard
   error(message: string, error?: Error | any) {
     this.log('error', message, error)
   }
 
-  // Enhanced grouping with visual improvements
+  @guard
   group(label: string, level: LogLevel = 'info') {
-    if (!this.shouldLog(level)) return
     const config = LOG_CONFIGS[level]
+
     console.group(
       `%c${this.createGroupBorder('┌')} ${config.emoji} ${label} ${this.createGroupBorder('┐')}`,
-      this.createEnhancedHeaderStyle(config)
+      this.createHeaderStyle(config, false)
     )
+    this.groupDepth++
   }
 
+  @guard
   groupCollapsed(label: string, level: LogLevel = 'info') {
-    if (!this.shouldLog(level)) return
     const config = LOG_CONFIGS[level]
+
     console.groupCollapsed(
       `%c${config.emoji} ${label}`,
-      this.createEnhancedHeaderStyle(config)
+      this.createHeaderStyle(config, false)
     )
+    this.groupDepth++
   }
 
+  @guard
   table(data: any[], level: LogLevel = 'info') {
-    if (!this.shouldLog(level)) return
     const config = LOG_CONFIGS[level]
 
     console.log(
       `%c${config.emoji} [${config.prefix}] Table Data (${data.length} rows):`,
-      this.createEnhancedHeaderStyle(config)
+      this.createHeaderStyle(config, this.isInsideGroup())
     )
     console.table(data)
   }
 
-  // Visual separator methods
-  separator(label?: string, level: LogLevel = 'info') {
-    if (!this.shouldLog(level)) return
+  @guard
+  separator(label?: string) {
     const line = '━'.repeat(50)
     const text = label ? `━━━ ${label} ━━━` : line
+
     console.log(`%c${text}`, this.createSeparatorStyle())
   }
 
-  banner(text: string, level: LogLevel = 'info') {
-    if (!this.shouldLog(level)) return
-    const config = LOG_CONFIGS[level]
-    const banner = this.createBanner(text, config.emoji)
-    console.log(`%c${banner}`, this.createBannerStyle(config))
-  }
-
-  progress(
-    current: number,
-    total: number,
-    message?: string,
-    level: LogLevel = 'info'
-  ) {
-    if (!this.shouldLog(level)) return
-    const percentage = Math.round((current / total) * 100)
-    const progressBar = this.createProgressBar(percentage)
-    const text = message
-      ? `${message} - ${progressBar} ${percentage}%`
-      : `${progressBar} ${percentage}%`
-    this.log(level, text, { current, total, percentage })
-  }
-
+  @guard
   time(label: string, level: LogLevel = 'debug') {
-    if (!this.shouldLog(level)) return
     const config = LOG_CONFIGS[level]
+
     console.log(
-      `%c${config.emoji} ⏱️  Starting timer: ${label}`,
-      this.createEnhancedHeaderStyle(config)
+      `%c${config.emoji} ⏱️ Starting timer: ${label}`,
+      this.createHeaderStyle(config, this.isInsideGroup())
     )
     console.time(`⏱️ ${label}`)
   }
 
+  @guard
   timeEnd(label: string, level: LogLevel = 'debug') {
-    if (!this.shouldLog(level)) return
     const config = LOG_CONFIGS[level]
+
     console.log(
       `%c${config.emoji} 🏁 Timer finished: ${label}`,
-      this.createEnhancedHeaderStyle(config)
+      this.createHeaderStyle(config, this.isInsideGroup())
     )
     console.timeEnd(`⏱️ ${label}`)
   }
 
-  getAnalytics(): ProcessingMetrics[] {
-    return [...this.metricsData]
-  }
-
-  getAnalyticsSummary() {
-    return this.calculateAnalyticsSummary()
-  }
-
-  exportAnalytics(): string {
-    const summary = this.calculateAnalyticsSummary()
-
-    return JSON.stringify(
-      {
-        sessionStart: new Date(this.startTime).toISOString(),
-        sessionDuration: Date.now() - this.startTime,
-        logCount: this.logCount,
-        enabledModes: Array.from(this.enabledModes),
-        metrics: this.metricsData,
-        summary
-      },
-      null,
-      2
-    )
-  }
-
-  clearAnalytics() {
-    this.metricsData.length = 0
-    this.logCount = 0
-    Object.assign(this, { startTime: Date.now() })
-    this.info('Analytics cleared and session reset')
-  }
-
-  systemInfo() {
-    const info = {
-      userAgent: navigator.userAgent,
-      platform: navigator.platform,
-      language: navigator.language,
-      cookieEnabled: navigator.cookieEnabled,
-      onLine: navigator.onLine,
-      memory: this.getMemoryUsage(),
-      timestamp: new Date().toISOString(),
-      sessionDuration: this.getElapsedTime()
-    }
-    this.info('System Information', info)
-  }
-
+  @guard
   groupEnd() {
+    if (this.groupDepth > 0) {
+      this.groupDepth--
+    }
     console.log(
       '%c└────────────────────────────────────────────────┘',
       'color: #666; font-family: monospace;'
@@ -269,73 +218,51 @@ class DebugLogger {
   }
 
   static create(
-    debugOptions: IDebugOptions = ['warn', 'error'],
-    environment?: ILoggerEnvironment
+    logConfig: LogLevel[] = ['warn', 'error'],
+    environment?: LoggerEnvironment
   ): DebugLogger {
-    return new DebugLogger(debugOptions, environment)
+    return new DebugLogger(logConfig, environment)
   }
 
-  private printWelcomeMessage() {
-    if (this.enabledModes.size === 0) return
+  public shouldLog(level: LogLevel): boolean {
+    return this.enabledLevels.has(level)
+  }
 
-    const modes = Array.from(this.enabledModes).join(', ')
-    console.log(
-      '%c🚀 Debug Logger Initialized\n' +
-        `%cEnabled modes: ${modes}\n` +
-        `%cSession started: ${new Date().toLocaleTimeString()}`,
-      'color: #61dafb; font-size: 14px; font-weight: bold;',
-      'color: #98fb98; font-size: 12px;',
-      'color: #ddd; font-size: 11px;'
-    )
+  public getEnabledLevels(): LogLevel[] {
+    return Array.from(this.enabledLevels)
+  }
+
+  public isInsideGroup(): boolean {
+    return this.groupDepth > 0
   }
 
   private createGroupBorder(char: string): string {
     return char.repeat(3)
   }
 
-  private createProgressBar(percentage: number): string {
-    const filled = Math.floor(percentage / 5)
-    const empty = 20 - filled
-    return '█'.repeat(filled) + '░'.repeat(empty)
+  private parseLogConfig(config: LogLevel[]): Set<LogLevel> {
+    return new Set(LOG_LEVEL_HIERARCHY[this.getMinimumLevel(config)])
   }
 
-  private createBanner(text: string, emoji: string): string {
-    const line = '═'.repeat(Math.max(20, text.length + 4))
-    return `╔${line}╗\n║ ${emoji} ${text.toUpperCase()} ${emoji} ║\n╚${line}╝`
-  }
+  private getMinimumLevel(levels: LogLevel[]): LogLevel {
+    const indices = levels.map((level) => LOG_LEVELS.indexOf(level))
+    const minIndex = Math.min(...indices)
 
-  private estimateFPS(duration: number): string {
-    const fps = 1000 / duration
-    if (fps >= 60) return '🟢 60+ FPS'
-    if (fps >= 30) return '🟡 30-60 FPS'
-    return '🔴 <30 FPS'
-  }
-
-  private getMemoryUsage(): number {
-    // @ts-ignore - performance.memory is not in all browsers
-    return performance.memory?.usedJSHeapSize || 0
-  }
-
-  private parseDebugOptions(options: IDebugOptions): Set<LogLevel> {
-    if (options === false || options === 'none') return new Set()
-    if (options === 'all')
-      return new Set(Object.keys(LOG_CONFIGS) as LogLevel[])
-    return new Set(options)
-  }
-
-  private shouldLog(level: LogLevel): boolean {
-    // If verbose is enabled, log everything
-    if (this.enabledModes.has('verbose')) return true
-
-    // Otherwise check if the specific level is enabled
-    return this.enabledModes.has(level)
+    return LOG_LEVELS[minIndex]
   }
 
   private getElapsedTime(): string {
     return ((Date.now() - this.startTime) / 1000).toFixed(2)
   }
 
-  private createEnhancedHeaderStyle(config: LogConfig): string {
+  private createHeaderStyle(
+    config: LogLevelConfig,
+    hideBorder: boolean = false
+  ): string {
+    const borderStyle = hideBorder
+      ? ''
+      : `border-left: 4px solid ${config.borderColor};`
+
     return css`
       color: ${config.color};
       background: linear-gradient(
@@ -343,7 +270,7 @@ class DebugLogger {
         ${config.bgColor}22,
         ${config.borderColor}11
       );
-      border-left: 4px solid ${config.borderColor};
+      ${borderStyle}
       padding: 2px 6px;
       border-radius: 3px;
       font-weight: 700;
@@ -364,17 +291,6 @@ class DebugLogger {
     `
   }
 
-  private createBannerStyle(config: LogConfig): string {
-    return css`
-      color: ${config.color};
-      font-family: monospace;
-      font-weight: bold;
-      font-size: 12px;
-      line-height: 1.2;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-    `
-  }
-
   private createValueStyle(type: ValueType): string {
     return css`
       color: ${TYPE_COLORS[type]};
@@ -386,67 +302,51 @@ class DebugLogger {
     `
   }
 
-  private getConsoleMethod(level: LogLevel) {
-    switch (level) {
-      case 'error':
-        return console.error
-      case 'warn':
-        return console.warn
-      case 'info':
-        return console.info
-      case 'debug':
-      case 'verbose':
-      default:
-        return console.log
-    }
+  private getConsoleMethod(level: LogLevel): typeof console.log {
+    const consoleMap = {
+      error: console.error,
+      warn: console.warn,
+      info: console.info,
+      debug: console.log,
+      verbose: console.log
+    } as const
+
+    return consoleMap[level]
   }
 
+  @guard
   private log(level: LogLevel, message: string, data?: any) {
-    if (!this.shouldLog(level)) return
+    this.logCount = this.logCount + 1
 
-    this.logCount++
     const config = LOG_CONFIGS[level]
     const timestamp = new Date().toLocaleTimeString()
     const header = `${config.emoji} [${config.prefix}] ${message} (${this.getElapsedTime()}s @ ${timestamp})`
-    const consoleMethod = this.getConsoleMethod(level)
-    const { text, styles } =
-      data !== undefined ? this.formatData(data) : { text: '', styles: [] }
+    const log = this.getConsoleMethod(level)
+
+    const { text, styles } = this.formatData(data)
 
     if (text) {
-      // Log header and content separately to avoid style bleeding
-      consoleMethod(`%c${header}`, this.createEnhancedHeaderStyle(config))
-      consoleMethod(text, ...styles)
+      log(`%c${header}`, this.createHeaderStyle(config, this.isInsideGroup()))
+      log(`${text}\n\n`, ...styles)
     } else {
-      consoleMethod(`%c${header}`, this.createEnhancedHeaderStyle(config))
+      log(`%c${header}`, this.createHeaderStyle(config, this.isInsideGroup()))
+      log('\n\n')
     }
   }
 
-  private formatData(data: any): ConsoleOutput {
+  private formatData(data: any, depth: number = 0): ConsoleOutput {
     if (data === undefined || data === null) {
       return { text: '', styles: [] }
     }
 
-    if (data instanceof Error) {
-      return this.formatError(data)
-    }
+    if (data instanceof Error) return this.formatError(data)
+    if (data instanceof Date) return this.formatDate(data)
+    if (data instanceof RegExp) return this.formatRegExp(data)
 
-    if (data instanceof Date) {
-      return this.formatDate(data)
-    }
+    if (typeof data === 'function') return this.formatFunction(data)
+    if (typeof data !== 'object') return this.formatPrimitive(data)
 
-    if (data instanceof RegExp) {
-      return this.formatRegExp(data)
-    }
-
-    if (typeof data === 'function') {
-      return this.formatFunction(data)
-    }
-
-    if (typeof data !== 'object') {
-      return this.formatPrimitive(data)
-    }
-
-    return this.formatObject(data)
+    return this.formatObject(data, depth)
   }
 
   private formatError(error: Error): ConsoleOutput {
@@ -463,7 +363,7 @@ class DebugLogger {
     const stackLines = error.stack
       .split('\n')
       .slice(1)
-      .map((line) => `    ${line.trim()}`)
+      .map((line) => `${' '.repeat(4)}${line.trim()}`)
       .join('\n')
 
     return {
@@ -488,6 +388,7 @@ class DebugLogger {
 
   private formatFunction(fn: Function): ConsoleOutput {
     const name = fn.name || 'anonymous'
+
     return {
       text: `%c[Function: ${name}]`,
       styles: [this.createValueStyle('function')]
@@ -496,13 +397,24 @@ class DebugLogger {
 
   private formatPrimitive(data: any): ConsoleOutput {
     const formattedValue = this.formatValue(data)
+
     return {
       text: `%c${formattedValue}`,
       styles: [this.createValueStyle(this.getValueType(data))]
     }
   }
 
-  private formatObject(data: any): ConsoleOutput {
+  private formatObject(data: any, depth: number = 0): ConsoleOutput {
+    if (depth > 3) {
+      const type = Array.isArray(data) ? 'Array' : 'Object'
+      const size = Array.isArray(data) ? data.length : Object.keys(data).length
+
+      return {
+        text: `%c[${type}(${size}) - Max depth reached]`,
+        styles: [this.createValueStyle('default')]
+      }
+    }
+
     const entries: [string, any][] = Array.isArray(data)
       ? data.map((v, i) => [`[${i}]`, v])
       : Object.entries(data)
@@ -510,36 +422,61 @@ class DebugLogger {
     if (entries.length === 0) {
       const emptyBracket = Array.isArray(data) ? '[]' : '{}'
       const type = Array.isArray(data) ? 'array' : 'object'
+
       return {
         text: `%c${emptyBracket}`,
         styles: [this.createValueStyle(type)]
       }
     }
 
-    // Limit entries for large objects
     const maxEntries = 50
     const limitedEntries = entries.slice(0, maxEntries)
     const hasMore = entries.length > maxEntries
 
-    const result = this.formatEntries(limitedEntries)
+    const result = this.formatEntries(limitedEntries, depth)
 
     if (hasMore) {
-      result.text += `\n  %c... and ${entries.length - maxEntries} more`
+      const indent = '  '.repeat(depth + 1)
+      result.text += `\n${indent}%c... and ${entries.length - maxEntries} more`
       result.styles.push(this.createValueStyle('default'))
     }
 
     return result
   }
 
-  private formatEntries(entries: [string, any][]): ConsoleOutput {
-    const segments = entries.map(([key, value]) => ({
-      text: `  %c${key}%c: %c${this.formatValue(value)}`,
-      styles: [
-        this.createValueStyle('key'),
-        this.createValueStyle('bracket'),
-        this.createValueStyle(this.getValueType(value))
-      ]
-    }))
+  private formatEntries(
+    entries: [string, any][],
+    depth: number
+  ): ConsoleOutput {
+    const indent = '  '.repeat(depth + 1)
+
+    const segments = entries.map(([key, value]) => {
+      const valueResult = this.formatData(value, depth + 1)
+
+      if (valueResult.text) {
+        const indentedValue = valueResult.text
+          .split('\n')
+          .map((line, index) => (index === 0 ? line : `${indent}  ${line}`))
+          .join('\n')
+
+        return {
+          text: `${indent}%c${key}%c: ${indentedValue}`,
+          styles: [
+            this.createValueStyle('key'),
+            this.createValueStyle('bracket'),
+            ...valueResult.styles
+          ]
+        }
+      }
+      return {
+        text: `${indent}%c${key}%c: %c${this.formatValue(value)}`,
+        styles: [
+          this.createValueStyle('key'),
+          this.createValueStyle('bracket'),
+          this.createValueStyle(this.getValueType(value))
+        ]
+      }
+    })
 
     return {
       text: segments.map((s) => s.text).join('\n'),
@@ -548,14 +485,14 @@ class DebugLogger {
   }
 
   private formatValue(value: any): string {
-    if (value === null) return 'null'
-    if (value === undefined) return 'undefined'
+    if ([null, undefined].includes(value)) return `${value}`
 
     if (typeof value === 'string') {
       const truncated =
         value.length > 100 ? value.substring(0, 100) + '...' : value
+
       return truncated.includes('\n')
-        ? `"${truncated.replace(/\n/g, '\n    ')}"`
+        ? `"${truncated.replace(/\n/g, `\n${' '.repeat(4)}`)}"`
         : `"${truncated}"`
     }
 
@@ -563,13 +500,8 @@ class DebugLogger {
       return `[Function: ${value.name || 'anonymous'}]`
     }
 
-    if (value instanceof Date) {
-      return value.toISOString()
-    }
-
-    if (value instanceof RegExp) {
-      return value.toString()
-    }
+    if (value instanceof Date) return value.toISOString()
+    if (value instanceof RegExp) return value.toString()
 
     if (typeof value === 'object') {
       const size = Array.isArray(value)
@@ -585,47 +517,13 @@ class DebugLogger {
   }
 
   private getValueType(value: any): ValueType {
-    if (value === null) return 'null'
-    if (value === undefined) return 'undefined'
+    if ([null, undefined].includes(value)) return `${value}` as ValueType
     if (value instanceof Date) return 'date'
     if (value instanceof RegExp) return 'regexp'
     if (Array.isArray(value)) return 'array'
 
     const type = typeof value
     return type in TYPE_COLORS ? (type as ValueType) : 'default'
-  }
-
-  private calculateAnalyticsSummary() {
-    if (this.metricsData.length === 0) {
-      return {
-        totalStages: 0,
-        averageDuration: 0,
-        errorCount: 0,
-        memoryPeak: 0,
-        sessionDuration: Date.now() - this.startTime
-      }
-    }
-
-    const totalDuration = this.metricsData.reduce(
-      (sum, m) => sum + m.duration,
-      0
-    )
-
-    const avgDuration = totalDuration / this.metricsData.length
-    const memoryPeak = Math.max(...this.metricsData.map((m) => m.memory ?? 0))
-
-    const errorCount = this.metricsData.filter(
-      (m) => m.level === 'error'
-    ).length
-
-    return {
-      totalStages: this.metricsData.length,
-      averageDuration: Math.round(avgDuration * 100) / 100,
-      errorCount,
-      memoryPeak,
-      sessionDuration: Date.now() - this.startTime,
-      logCount: this.logCount
-    }
   }
 }
 

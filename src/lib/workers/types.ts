@@ -1,6 +1,6 @@
 import type { OCRSettings } from '../config'
-import type { IDebugOptions } from '../useDocument'
-// types/enhanced.ts
+import type { LogLevel } from '../DebugLogger'
+
 export interface OCRBlock {
   readonly text: string
   readonly confidence: number
@@ -49,7 +49,7 @@ export interface PdfWorkerInput {
     pageHeight: number
     workspaceScale: number
     customWords: string
-    debug: IDebugOptions
+    debug: LogLevel[]
     charWhiteList: string
     autoPaginate: boolean
     ocrSettings?: OCRSettings

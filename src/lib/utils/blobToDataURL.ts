@@ -1,8 +1,8 @@
-import { DebugLogger, type IDebugOptions } from '../DebugLogger'
+import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 export async function blobToDataURL(
   blob: Blob,
-  debug: IDebugOptions = 'none'
+  debug: LogLevel[] = []
 ): Promise<string> {
   const logger = DebugLogger.create(debug)
 

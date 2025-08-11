@@ -9,9 +9,7 @@ import {
   type ReactNode
 } from 'react'
 import { Document } from '../components/Document'
-import { DEFAULT_MARGIN } from '../constants'
 import { forceGarbageCollection } from '../utils/forceGarbageCollection'
-import { CONFIG } from '../config'
 import {
   create as createPdf,
   type ICreateOptions,

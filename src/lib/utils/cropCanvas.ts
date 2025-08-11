@@ -1,4 +1,4 @@
-import { DebugLogger, type IDebugOptions } from '../DebugLogger'
+import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 export function cropCanvas(
   sourceCanvases: OffscreenCanvas[],
@@ -15,7 +15,7 @@ export function cropCanvas(
     margin: number
     isFirstPage: boolean
     pageHeight: number
-    debug?: IDebugOptions
+    debug?: LogLevel[]
   }
 ): OffscreenCanvas[] {
   const logger = DebugLogger.create(debug)

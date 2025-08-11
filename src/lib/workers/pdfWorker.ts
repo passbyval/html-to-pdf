@@ -8,7 +8,7 @@ import { transferBitmapToCanvas } from '../utils/transferBitmapToCanvas'
 import { createTesseractWorker } from './createTesseractWorker'
 import { forceGarbageCollection } from '../utils/forceGarbageCollection'
 import { cleanupCanvas } from '../utils/createCanvas'
-import { DebugLogger, type IDebugOptions } from '../DebugLogger'
+import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 import { CONFIG, type OCRSettings } from '../config'
 
@@ -88,7 +88,7 @@ const processPage = async ({
   totalPages: number
   margin: number
   ocrSettings: OCRSettings
-  debug: IDebugOptions
+  debug: LogLevel[]
 }): Promise<ProcessingMetrics> => {
   const startTime = Date.now()
   const logger = DebugLogger.create(debug)

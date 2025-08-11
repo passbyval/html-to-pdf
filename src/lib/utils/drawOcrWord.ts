@@ -1,5 +1,5 @@
 import type jsPDF from 'jspdf'
-import { DebugLogger, type IDebugOptions } from '../DebugLogger'
+import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 export function drawOcrWord(
   doc: jsPDF,
@@ -7,7 +7,7 @@ export function drawOcrWord(
   fontSize: number,
   ratio: number,
   options: {
-    debug?: IDebugOptions
+    debug?: LogLevel[]
     logger?: DebugLogger
   } = {}
 ): void {

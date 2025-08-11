@@ -1,6 +1,6 @@
 import { cropCanvas } from './cropCanvas'
 import type { Worker } from 'tesseract.js'
-import { DebugLogger, type IDebugOptions } from '../DebugLogger'
+import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 interface LineBox {
   top: number
@@ -14,12 +14,12 @@ export async function getPaginatedCanvases(
     pageHeight,
     margin,
     worker,
-    debug = 'none'
+    debug = []
   }: {
     pageHeight: number
     margin: number
     worker: Worker
-    debug?: IDebugOptions
+    debug?: LogLevel[]
   }
 ): Promise<[OffscreenCanvas, OffscreenCanvas][]> {
   const startTime = Date.now()

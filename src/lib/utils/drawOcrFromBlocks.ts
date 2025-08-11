@@ -3,7 +3,7 @@ import { CONFIG } from '../config'
 import type { RecognizeResult, Worker } from 'tesseract.js'
 import { drawOcrWord } from '../utils/drawOcrWord'
 import type { IOcrSettings } from '../useDocument/types'
-import { DebugLogger, type IDebugOptions } from '../DebugLogger'
+import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 interface ProcessingState {
   totalLines: number
@@ -39,7 +39,7 @@ export async function drawOcrFromBlocks({
   canvas: HTMLCanvasElement | OffscreenCanvas
   ratio: number
   ocrSettings: Partial<IOcrSettings>
-  debug: IDebugOptions
+  debug: LogLevel
   logger?: DebugLogger
 }): Promise<void> {
   const startTime = Date.now()
@@ -131,13 +131,6 @@ export async function drawOcrFromBlocks({
             height: Math.round(lineHeight)
           })
 
-          if (Array.isArray(debug) && debug.includes('debug')) {
-            console.log({
-              text: line.text,
-              confidence: line.confidence
-            })
-          }
-
           if (line.confidence <= confidenceThreshold) {
             logger?.verbose('Skipping line due to low confidence', {
               text,
@@ -154,7 +147,7 @@ export async function drawOcrFromBlocks({
           const wordCount = line.words?.length || 0
 
           logger?.debug(
-            `Drawing line: "${text.substring(0, 30)}${text.length > 30 ? '...' : ''}"`
+            `Drawing line: "${text.substring(0, 30).replace('\n', '')}${text.length > 30 ? '...' : ''}"`
           )
 
           drawOcrWord(doc, line, fontSize, ratio, {

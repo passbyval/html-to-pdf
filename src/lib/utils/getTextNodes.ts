@@ -1,4 +1,4 @@
-import { DebugLogger, type IDebugOptions } from '../DebugLogger'
+import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 export interface ITextNode {
   text: string
@@ -11,7 +11,7 @@ export function getTextNodes(
   root: Node,
   canvas: HTMLCanvasElement,
   relativeTo: HTMLElement = root as HTMLElement,
-  debug: IDebugOptions = 'none'
+  debug: LogLevel[] = []
 ): ITextNode[] {
   const startTime = Date.now()
   const logger = DebugLogger.create(debug)

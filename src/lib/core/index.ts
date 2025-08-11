@@ -1,6 +1,6 @@
 import type { Options as ToCanvasOptions } from 'html-to-image/lib/types'
 import { CONFIG, type OCRSettings } from '../config'
-import { DebugLogger, type IDebugOptions } from '../DebugLogger'
+import { DebugLogger, type LogLevel } from '../DebugLogger'
 import PdfWorker from '../workers/pdfWorker?worker'
 import { css } from '../utils/css'
 import { traverse } from '../utils/traverse'
@@ -35,7 +35,7 @@ export interface IDimensions {
 export interface ICreateOptions {
   format?: IPaperFormat
   margin?: IMargin | number
-  debug?: IDebugOptions
+  debug?: LogLevel[]
   workspaceScale?: number
   readonly ocrSettings?: OCRSettings
   onError?: (error: Error) => void
@@ -253,15 +253,6 @@ export const create = (
       })
 
       const ocrCanvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
-
-      if (Array.isArray(debug) && debug.includes('debug')) {
-        ocrCanvas.toBlob((blob) => {
-          if (blob) {
-            const url = URL.createObjectURL(blob)
-            window.open(url, '_blank', 'width=800,height=600')
-          }
-        })
-      }
 
       document.body.removeChild(clonedNode)
 

@@ -1,10 +1,10 @@
-import { DebugLogger, type IDebugOptions } from '../DebugLogger'
+import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 export function transferBitmapToCanvas(
   bitmap: ImageBitmap,
   width = bitmap.width,
   height = bitmap.height,
-  debug: IDebugOptions = 'none'
+  debug: LogLevel[] = []
 ) {
   const logger = DebugLogger.create(debug)
 
