@@ -19,7 +19,7 @@ export async function getPaginatedCanvases(
     pageHeight: number
     margin: number
     worker: Worker
-    debug?: LogLevel[]
+    debug?: LogLevel
   }
 ): Promise<[OffscreenCanvas, OffscreenCanvas][]> {
   const startTime = Date.now()

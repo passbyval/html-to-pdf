@@ -15,7 +15,7 @@ export const createTesseractWorker = async (
   customWords: string,
   tessedit_char_whitelist: string,
   lang: string = 'eng',
-  debug: LogLevel[] = []
+  debug: LogLevel
 ) => {
   const startTime = Date.now()
   const logger = DebugLogger.create(debug)

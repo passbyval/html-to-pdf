@@ -2,7 +2,7 @@ import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 export async function blobToDataURL(
   blob: Blob,
-  debug: LogLevel[] = []
+  debug: LogLevel
 ): Promise<string> {
   const logger = DebugLogger.create(debug)
 

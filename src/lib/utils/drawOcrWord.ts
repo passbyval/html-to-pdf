@@ -7,7 +7,7 @@ export function drawOcrWord(
   fontSize: number,
   ratio: number,
   options: {
-    debug?: LogLevel[]
+    debug?: LogLevel
     logger?: DebugLogger
   } = {}
 ): void {

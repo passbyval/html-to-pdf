@@ -4,7 +4,7 @@ export function transferBitmapToCanvas(
   bitmap: ImageBitmap,
   width = bitmap.width,
   height = bitmap.height,
-  debug: LogLevel[] = []
+  debug: LogLevel
 ) {
   const logger = DebugLogger.create(debug)
 

@@ -49,7 +49,7 @@ export interface PdfWorkerInput {
     pageHeight: number
     workspaceScale: number
     customWords: string
-    debug: LogLevel[]
+    debug: LogLevel
     charWhiteList: string
     autoPaginate: boolean
     ocrSettings?: OCRSettings

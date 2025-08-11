@@ -15,7 +15,7 @@ export function cropCanvas(
     margin: number
     isFirstPage: boolean
     pageHeight: number
-    debug?: LogLevel[]
+    debug?: LogLevel
   }
 ): OffscreenCanvas[] {
   const logger = DebugLogger.create(debug)

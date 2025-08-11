@@ -35,7 +35,7 @@ export interface IDimensions {
 export interface ICreateOptions {
   format?: IPaperFormat
   margin?: IMargin | number
-  debug?: LogLevel[]
+  debug?: LogLevel
   workspaceScale?: number
   readonly ocrSettings?: OCRSettings
   onError?: (error: Error) => void
@@ -143,7 +143,7 @@ export const create = (
 
       if (!(element instanceof HTMLElement)) {
         const current = (element as unknown)!
-        const instanceType = current.constructor.name
+        const { name: instanceType } = current.constructor
 
         throw new Error(
           `Invalid element type: expected HTMLElement, got ${instanceType}`

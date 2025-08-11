@@ -28,6 +28,8 @@ const CONVERT_TO_BLOB_OPTIONS = Object.freeze({
 const handleDataCloneError = (
   event: PromiseRejectionEvent | ErrorEvent
 ): boolean => {
+  const logger = DebugLogger.create('warn')
+
   const error =
     event instanceof PromiseRejectionEvent ? event.reason : event.error
   const message = event instanceof ErrorEvent ? event.message : 'event'
@@ -38,7 +40,7 @@ const handleDataCloneError = (
     (message && message.includes('could not be cloned'))
 
   if (isDataCloneError) {
-    console.debug(
+    logger.debug(
       'Caught DataCloneError (harmless Tesseract.js internal operation)'
     )
     event.preventDefault?.()
@@ -88,7 +90,7 @@ const processPage = async ({
   totalPages: number
   margin: number
   ocrSettings: OCRSettings
-  debug: LogLevel[]
+  debug: LogLevel
 }): Promise<ProcessingMetrics> => {
   const startTime = Date.now()
   const logger = DebugLogger.create(debug)
@@ -109,7 +111,7 @@ const processPage = async ({
   logger.debug('Converting canvas to blob')
   const [, imageData] = await chain(
     () => canvas.convertToBlob(CONVERT_TO_BLOB_OPTIONS),
-    blobToDataURL
+    (blob) => blobToDataURL(blob, debug)
   )
 
   const { width, height } = doc.internal.pageSize

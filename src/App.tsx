@@ -56,7 +56,7 @@ const data2: ITableData[] = JSON.parse(
 function App() {
   const { Document, create, Viewer, PreviewImage, isCreating, progress } =
     useDocument({
-      debug: ['debug']
+      debug: 'verbose'
     })
 
   const onClick = async () => {

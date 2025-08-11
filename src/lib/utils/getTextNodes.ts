@@ -11,7 +11,7 @@ export function getTextNodes(
   root: Node,
   canvas: HTMLCanvasElement,
   relativeTo: HTMLElement = root as HTMLElement,
-  debug: LogLevel[] = []
+  debug: LogLevel
 ): ITextNode[] {
   const startTime = Date.now()
   const logger = DebugLogger.create(debug)
