@@ -8,7 +8,7 @@ import { transferBitmapToCanvas } from '../utils/transferBitmapToCanvas'
 import { createTesseractWorker } from './createTesseractWorker'
 import { forceGarbageCollection } from '../utils/forceGarbageCollection'
 import { cleanupCanvas } from '../utils/createCanvas'
-import { DebugLogger, type LogLevel } from '../DebugLogger'
+import { DebugLogger, type LogLevel, overrides } from '../DebugLogger'
 
 import { CONFIG, type OCRSettings } from '../config'
 
@@ -19,6 +19,32 @@ import {
   type ProcessingMetrics
 } from './types'
 import type { Worker } from 'tesseract.js'
+
+const original = Object.fromEntries(
+  overrides.map((override) => [override, console[override].bind(console)])
+)
+
+const wrapper =
+  (level: keyof typeof original) =>
+  (...args: unknown[]) => {
+    try {
+      self.postMessage({
+        type: 'console',
+        level,
+        args: structuredClone(args)
+      })
+    } catch {
+      self.postMessage({
+        type: 'console',
+        level,
+        args: args.map((arg) => String(arg))
+      })
+    }
+  }
+
+overrides.forEach((override) => {
+  console[override] = wrapper(override)
+})
 
 const CONVERT_TO_BLOB_OPTIONS = Object.freeze({
   type: `image/${CONFIG.PDF.IMAGE_FORMAT.toLowerCase()}`,

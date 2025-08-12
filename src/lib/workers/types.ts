@@ -57,7 +57,7 @@ export interface PdfWorkerInput {
 }
 
 export interface PdfWorkerOutput {
-  readonly type: Progress
+  readonly type: Progress | 'console'
   readonly pageNumber?: number
   readonly totalPages?: number
   readonly progress?: number
@@ -69,7 +69,10 @@ export interface PdfWorkerOutput {
   readonly stage?: string
   readonly stageDescription?: string
   readonly metrics?: ProcessingMetrics
-  readonly timestamp: number
+
+  // Console forwarding properties
+  readonly level?: 'log' | 'debug' | 'info' | 'warn' | 'error'
+  readonly args?: string[]
 }
 
 export interface ProcessingOptions {

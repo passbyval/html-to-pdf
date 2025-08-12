@@ -1,6 +1,6 @@
 import type { Options as ToCanvasOptions } from 'html-to-image/lib/types'
 import { CONFIG, type OCRSettings } from '../config'
-import { DebugLogger, type LogLevel } from '../DebugLogger'
+import { DebugLogger, type LogLevel, overrides } from '../DebugLogger'
 import PdfWorker from '../workers/pdfWorker?worker'
 import { css } from '../utils/css'
 import { traverse } from '../utils/traverse'
@@ -340,6 +340,22 @@ export const create = (
             return errorHandler(message.message || 'Unknown worker error')
         }
       }
+
+      worker.addEventListener(
+        'message',
+        (event: MessageEvent<PdfWorkerOutput>) => {
+          if (event.data.type === 'console') {
+            const { level, args = [] } = event.data
+
+            const consoleMethod =
+              console[level as 'debug' | 'warn' | 'error' | 'info' | 'log']
+
+            if (typeof consoleMethod === 'function') {
+              consoleMethod.apply(console, args)
+            }
+          }
+        }
+      )
     } catch (error) {
       if (error instanceof Error || typeof error === 'string') {
         errorHandler(error as Error)

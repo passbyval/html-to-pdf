@@ -89,7 +89,9 @@ export async function drawOcrFromBlocks({
     recognitionTime: `${Date.now() - startTime}ms`
   })
 
-  logger?.groupCollapsed('Processing OCR Blocks')
+  const groupLabel = 'Processing OCR Blocks'
+
+  logger?.groupCollapsed(groupLabel)
 
   const finalState = blocks.reduce((blockState, block, blockIndex) => {
     logger?.verbose(`Processing block ${blockIndex + 1}/${blocks.length}`, {
@@ -197,7 +199,7 @@ export async function drawOcrFromBlocks({
     successRate: `${Math.round(successRate)}%`
   }
 
-  logger?.groupEnd()
+  logger?.groupEnd(groupLabel)
 
   logger?.info('OCR processing completed', summaryInfo)
 

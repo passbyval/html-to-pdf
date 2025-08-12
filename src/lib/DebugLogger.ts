@@ -1,5 +1,8 @@
+import { css } from './utils/css'
+
 export const LogLevel = ['verbose', 'debug', 'info', 'warn', 'error'] as const
-export type LogLevel = (typeof LogLevel)[number] // Extract union type from array
+export type LogLevel = (typeof LogLevel)[number]
+
 export interface LoggerOptions {
   readonly colors?: boolean
   readonly prefix?: string
@@ -13,36 +16,92 @@ export const LOG_LEVELS: Record<Uppercase<LogLevel>, number> = {
   ERROR: 0b00001
 } as const
 
-const COLORS = {
-  RESET: '\x1b[0m',
-  BRIGHT: '\x1b[1m',
-  DIM: '\x1b[2m',
+export const overrides = [
+  'log',
+  'debug',
+  'info',
+  'warn',
+  'error',
+  'group',
+  'groupCollapsed',
+  'time',
+  'timeEnd',
+  'table',
+  'dir'
+] as const
 
-  BLACK: '\x1b[30m',
-  RED: '\x1b[31m',
-  GREEN: '\x1b[32m',
-  YELLOW: '\x1b[33m',
-  BLUE: '\x1b[34m',
-  MAGENTA: '\x1b[35m',
-  CYAN: '\x1b[36m',
-  WHITE: '\x1b[37m',
+const BROWSER_STYLES = {
+  RESET: '',
+  BRIGHT: css`
+    font-weight: bold;
+  `,
+  DIM: css`
+    opacity: 0.7;
+  `,
+  BLACK: css`
+    color: #000000;
+  `,
+  RED: css`
+    color: #ff4444;
+  `,
+  GREEN: css`
+    color: #16a34a;
+  `,
+  YELLOW: css`
+    color: #ffaa00;
+  `,
+  BLUE: css`
+    color: #4444ff;
+  `,
+  MAGENTA: css`
+    color: #ff44ff;
+  `,
+  CYAN: css`
+    color: #44ffff;
+  `,
+  WHITE: css`
+    color: #ffffff;
+  `,
 
-  BG_RED: '\x1b[41m',
-  BG_YELLOW: '\x1b[43m',
-  BG_BLUE: '\x1b[44m',
+  BG_RED: css`
+    background-color: #ff4444;
+    color: white;
+    padding: 2px 4px;
+    border-radius: 3px;
+  `,
+  BG_YELLOW: css`
+    background-color: #ffaa00;
+    color: black;
+    padding: 2px 4px;
+    border-radius: 3px;
+  `,
+  BG_BLUE: css`
+    background-color: #4444ff;
+    color: white;
+    padding: 2px 4px;
+    border-radius: 3px;
+  `,
 
-  HEX_PURPLE: '\x1b[38;2;153;128;255m',
-  HEX_LIGHT_BLUE: '\x1b[38;2;93;214;251m',
-  HEX_BLUE: '\x1b[38;2;124;172;248m',
-  HEX_GRAY: '\x1b[38;2;107;111;111m'
+  HEX_PURPLE: css`
+    color: #9980ff;
+  `,
+  HEX_LIGHT_BLUE: css`
+    color: #5dd6fb;
+  `,
+  HEX_BLUE: css`
+    color: #7cacff;
+  `,
+  HEX_GRAY: css`
+    color: #6b6f6f;
+  `
 } as const
 
-const LEVEL_COLORS: Record<LogLevel, string> = {
-  verbose: COLORS.DIM + COLORS.WHITE,
-  debug: COLORS.CYAN,
-  info: COLORS.GREEN,
-  warn: COLORS.YELLOW,
-  error: COLORS.RED + COLORS.BRIGHT
+const LEVEL_STYLES: Record<LogLevel, string> = {
+  verbose: BROWSER_STYLES.DIM + BROWSER_STYLES.WHITE,
+  debug: BROWSER_STYLES.CYAN,
+  info: BROWSER_STYLES.GREEN,
+  warn: BROWSER_STYLES.YELLOW,
+  error: BROWSER_STYLES.RED + BROWSER_STYLES.BRIGHT
 } as const
 
 function guard<T extends (...args: any[]) => any>(
@@ -62,10 +121,6 @@ function guard<T extends (...args: any[]) => any>(
       LOG_LEVELS[levelToCheck.toUpperCase() as Uppercase<LogLevel>] <=
       this.literal
     ) {
-      if (args[1]?.constructor?.name === 'Object') {
-        return this.json(args[1])
-      }
-
       return originalMethod.apply(this, args)
     }
   } as T
@@ -82,6 +137,7 @@ export class DebugLogger {
   private readonly level: LogLevel
   private readonly enableColors: boolean
   private readonly libraryPrefix: string
+  private groupStack: string[] = []
 
   constructor(level: LogLevel = 'warn', options: LoggerOptions = {}) {
     this.level = level ?? 'warn'
@@ -90,25 +146,12 @@ export class DebugLogger {
     this.libraryPrefix = options.prefix ?? 'html-to-pdf'
   }
 
-  public isWorkerContext() {
-    return typeof self !== 'undefined' && typeof window === 'undefined'
-  }
-
-  private replacer(json: string) {
-    return json
-      .replace(/"([^"]+)":/g, `${COLORS.HEX_BLUE}"$1"${COLORS.RESET}:`) // keys
-      .replace(/: "([^"]+)"/g, `: ${COLORS.HEX_LIGHT_BLUE}"$1"${COLORS.RESET}`) // strings
-      .replace(/: (\d+(?:\.\d+)?)/g, `: ${COLORS.HEX_PURPLE}$1${COLORS.RESET}`) // numbers (including decimals)
-      .replace(/: (true|false)/g, `: ${COLORS.BLUE}$1${COLORS.RESET}`) // booleans (kept original)
-      .replace(/: (null|undefined)/g, `: ${COLORS.HEX_GRAY}$1${COLORS.RESET}`) // null/undefined
-  }
-
   private formatMessage(
     level: LogLevel,
     icon: string,
     message: any,
     ...args: any[]
-  ): readonly [string, ...any[]] {
+  ): readonly [string, string[], ...any[]] {
     const prefixStr = `[${this.libraryPrefix}]`
 
     const padLength = Math.max(
@@ -117,185 +160,194 @@ export class DebugLogger {
 
     const baseLevelBadge = level.toUpperCase().padEnd(padLength)
 
-    const levelBadge = this.enableColors
-      ? `${LEVEL_COLORS[level]}${baseLevelBadge}${COLORS.RESET}`
-      : baseLevelBadge
+    if (!this.enableColors) {
+      return [
+        `${prefixStr} ${baseLevelBadge} ${icon} ${message}`,
+        [],
+        ...args
+      ] as const
+    }
 
-    const prefix = [
-      `${COLORS.BRIGHT}${COLORS.MAGENTA}${prefixStr}${COLORS.RESET}`,
-      levelBadge,
-      icon
-    ].join(' ')
+    // Browser console styling with %c placeholders
+    const styledMessage = `%c${prefixStr}%c ${baseLevelBadge} ${icon} ${message}`
 
-    return [`${prefix} ${message}`, ...args] as const
+    const styles = [
+      BROWSER_STYLES.BRIGHT + BROWSER_STYLES.MAGENTA, // prefix style
+      LEVEL_STYLES[level] // level style
+    ]
+
+    return [styledMessage, styles, ...args] as const
   }
 
   @guard
   verbose(message: any, ...args: any[]) {
-    const [formatted, ...rest] = this.formatMessage(
+    const [formatted, styles, ...rest] = this.formatMessage(
       'verbose',
       '💬',
       message,
       ...args
     )
 
-    console.info(formatted, ...rest)
+    console.info(formatted, ...styles, ...rest)
   }
 
   @guard
   debug(message: any, ...args: any[]) {
-    const [formatted, ...rest] = this.formatMessage(
+    const [formatted, styles, ...rest] = this.formatMessage(
       'debug',
       '🐛',
       message,
       ...args
     )
 
-    console.debug(formatted, ...rest)
+    console.debug(formatted, ...styles, ...rest)
   }
 
   @guard
   info(message: any, ...args: any[]) {
-    const [formatted, ...rest] = this.formatMessage(
+    const [formatted, styles, ...rest] = this.formatMessage(
       'info',
       'ℹ️',
       message,
       ...args
     )
 
-    console.info(formatted, ...rest)
+    console.info(formatted, ...styles, ...rest)
   }
 
   @guard
   warn(message: any, ...args: any[]) {
-    const [formatted, ...rest] = this.formatMessage(
+    const [formatted, styles, ...rest] = this.formatMessage(
       'warn',
       '⚠️',
       message,
       ...args
     )
 
-    console.warn(formatted, ...rest)
+    console.warn(formatted, ...styles, ...rest)
   }
 
   @guard
   error(message: any, ...args: any[]) {
-    const [formatted, ...rest] = this.formatMessage(
+    const [formatted, styles, ...rest] = this.formatMessage(
       'error',
       '🚨',
       message,
       ...args
     )
 
-    console.error(formatted, ...rest)
+    console.error(formatted, ...styles, ...rest)
   }
 
   @guard
   time(label: string) {
-    const [formatted] = this.formatMessage(
+    const [formatted, styles] = this.formatMessage(
       'debug',
       '⏱️',
       `Starting timer: ${label}`
     )
 
-    console.debug(formatted)
+    console.debug(formatted, ...styles)
     console.time(label)
   }
 
   @guard
   timeEnd(label: string) {
-    const [formatted] = this.formatMessage(
+    const [formatted, styles] = this.formatMessage(
       'debug',
       '🏁',
       `Timer finished: ${label}`
     )
 
-    console.debug(formatted)
+    console.debug(formatted, ...styles)
     console.timeEnd(label)
   }
 
-  @guard
   group(label: string, collapsed: boolean = false) {
-    const [formatted] = this.formatMessage('info', '📁', `Group: ${label}`)
-    console.info(formatted)
+    const [formatted, styles] = this.formatMessage(
+      'info',
+      '📁',
+      `Group: ${label}`
+    )
+    console.info(formatted, ...styles)
 
     const groupMethod = collapsed ? console.groupCollapsed : console.group
     groupMethod(label)
+
+    this.groupStack = [...this.groupStack, label]
   }
 
-  @guard
   groupCollapsed(label: string) {
-    this.group(label, true)
+    const [formatted, styles] = this.formatMessage(
+      'info',
+      '📁',
+      `Group: ${label}`
+    )
+    console.info(formatted, ...styles)
+
+    console.groupCollapsed(label)
+    this.groupStack = [...this.groupStack, label]
   }
 
-  @guard
-  groupEnd() {
-    const [formatted] = this.formatMessage('debug', '📁', 'Group ended')
+  groupEnd(label: string) {
+    const index = this.groupStack.lastIndexOf(label)
 
-    console.groupEnd()
-    console.debug(formatted)
+    if (index !== -1) {
+      const [formatted, styles] = this.formatMessage(
+        'debug',
+        '📁',
+        'Group ended'
+      )
+      console.debug(formatted, ...styles)
+
+      this.groupStack.slice(index).forEach(() => console.groupEnd())
+      this.groupStack = this.groupStack.slice(0, index)
+    }
   }
 
   @guard
   separator(char: string = '─', length: number = 50) {
     const line = char.repeat(length)
-    const [formatted] = this.formatMessage('debug', '📏', line)
+    const [formatted, styles] = this.formatMessage('debug', '📏', line)
 
-    console.debug(formatted)
+    console.debug(formatted, ...styles)
   }
 
   @guard
   table(data: any[], columns?: string[]) {
-    const [formatted] = this.formatMessage('info', '📊', 'Data table:')
+    const [formatted, styles] = this.formatMessage('info', '📊', 'Data table:')
 
-    console.info(formatted)
+    console.info(formatted, ...styles)
     console.table(data, columns)
   }
 
-  @guard
   json(obj: any, label?: string) {
-    const message = label ? `${label}:` : 'Object:'
-    const [formatted] = this.formatMessage('debug', '🔍', message)
+    const message = label ? `${label}:` : 'Object'
+    const [formatted, styles] = this.formatMessage('debug', '🔍', message)
 
-    console.debug(formatted)
+    console.debug(formatted, ...styles)
 
     if (obj && typeof obj === 'object') {
       const metadata = [
         Array.isArray(obj) && `Array[${obj.length}]`,
         obj.constructor?.name !== 'Object' && obj.constructor?.name,
-        Object.keys(obj).length > 0 && `${Object.keys(obj).length} keys`
+        Object.keys(obj).length > 0 && `${Object.keys(obj).length} items`
       ].reduce<string[]>((acc, item) => {
         if (item) acc.push(item)
         return acc
       }, [])
 
       if (metadata.length > 0) {
-        const [metaFormatted] = this.formatMessage(
+        const [metaFormatted, metaStyles] = this.formatMessage(
           'debug',
           '📋',
           metadata.join(' | ')
         )
-        console.debug(metaFormatted)
+        console.debug(metaFormatted, ...metaStyles)
       }
     }
 
-    if (this.isWorkerContext()) {
-      const json = JSON.stringify(obj, null, 2)
-      const prettyJson = this.replacer(json)
-
-      console.debug(prettyJson)
-    } else {
-      console.dir(obj, {
-        depth: null,
-        colors: this.enableColors,
-        compact: false,
-        breakLength: 80,
-        maxArrayLength: 100,
-        maxStringLength: 200,
-        showHidden: false,
-        showProxy: true
-      })
-    }
+    console.dir(obj)
   }
 
   static create(
