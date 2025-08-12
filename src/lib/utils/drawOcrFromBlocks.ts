@@ -54,11 +54,12 @@ export async function drawOcrFromBlocks({
   const recognitionResult = await (async (): Promise<RecognizeResult> => {
     try {
       logger?.debug('OCR recognition started')
-      logger?.time('OCR Recognition', 'debug')
+      logger?.time('OCR Recognition')
 
       const result = await worker.recognize(canvas, {}, { blocks: true })
 
-      logger?.timeEnd('OCR Recognition', 'debug')
+      logger?.timeEnd('OCR Recognition')
+
       logger?.debug('OCR recognition completed', {
         duration: `${Date.now() - startTime}ms`
       })
@@ -88,7 +89,7 @@ export async function drawOcrFromBlocks({
     recognitionTime: `${Date.now() - startTime}ms`
   })
 
-  logger?.group('Processing OCR Blocks', 'debug')
+  logger?.groupCollapsed('Processing OCR Blocks')
 
   const finalState = blocks.reduce((blockState, block, blockIndex) => {
     logger?.verbose(`Processing block ${blockIndex + 1}/${blocks.length}`, {
@@ -166,8 +167,6 @@ export async function drawOcrFromBlocks({
     )
   }, initialProcessingState)
 
-  logger?.groupEnd()
-
   const processingTime = Date.now() - startTime
 
   const {
@@ -197,6 +196,8 @@ export async function drawOcrFromBlocks({
     duration: `${processingTime}ms`,
     successRate: `${Math.round(successRate)}%`
   }
+
+  logger?.groupEnd()
 
   logger?.info('OCR processing completed', summaryInfo)
 
@@ -228,6 +229,6 @@ export async function drawOcrFromBlocks({
       }
     ]
 
-    logger?.table(analyticsTable, 'info')
+    logger?.table(analyticsTable)
   }
 }
