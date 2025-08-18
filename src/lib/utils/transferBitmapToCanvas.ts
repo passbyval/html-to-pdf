@@ -2,13 +2,14 @@ import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 export function transferBitmapToCanvas(
   bitmap: ImageBitmap,
+  debug: LogLevel,
   width = bitmap.width,
-  height = bitmap.height,
-  debug: LogLevel
+  height = bitmap.height
 ) {
   const logger = DebugLogger.create(debug)
 
   logger.debug('Transferring bitmap to canvas')
+
   logger.verbose('Bitmap transfer started', {
     bitmapSize: `${bitmap.width}x${bitmap.height}`,
     targetSize: `${width}x${height}`,
@@ -16,12 +17,30 @@ export function transferBitmapToCanvas(
   })
 
   const canvas = new OffscreenCanvas(width, height)
-  const ctx = canvas.getContext('bitmaprenderer') ?? canvas.getContext('2d')
+
+  const ctx =
+    canvas.getContext('bitmaprenderer', {
+      alpha: true,
+      desynchronized: true,
+      willReadFrequently: false,
+      colorType: 'float16',
+      colorSpace: 'display-p3'
+    }) ??
+    canvas.getContext('2d', {
+      alpha: true,
+      desynchronized: true,
+      willReadFrequently: true,
+      colorType: 'float16',
+      colorSpace: 'display-p3'
+    })
 
   if (ctx instanceof ImageBitmapRenderingContext) {
     ctx?.transferFromImageBitmap(bitmap)
     logger.verbose('Used ImageBitmapRenderingContext for optimal transfer')
-  } else {
+  } else if (ctx instanceof CanvasRenderingContext2D) {
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+
     ctx?.drawImage(bitmap, 0, 0)
     logger.verbose('Fallback to 2D context for bitmap transfer')
   }

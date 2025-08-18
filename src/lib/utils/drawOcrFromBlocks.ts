@@ -4,6 +4,7 @@ import type { RecognizeResult, Worker } from 'tesseract.js'
 import { drawOcrWord } from '../utils/drawOcrWord'
 import type { IOcrSettings } from '../useDocument/types'
 import { DebugLogger, type LogLevel } from '../DebugLogger'
+import { blobToDataURL } from '../utils/blobToDataURL'
 
 interface ProcessingState {
   totalLines: number
@@ -74,6 +75,8 @@ export async function drawOcrFromBlocks({
   const {
     data: { blocks = [], confidence: overallConfidence }
   } = recognitionResult
+
+  console.log({ recognitionResult })
 
   if (!blocks || blocks.length === 0) {
     logger?.error('No OCR blocks found', {

@@ -1,5 +1,7 @@
 import type { OCRSettings } from '../config'
 import type { LogLevel } from '../DebugLogger'
+import { overrides } from '../DebugLogger'
+import type { ITextNode } from '../utils/getTextNodes'
 
 export interface OCRBlock {
   readonly text: string
@@ -44,15 +46,15 @@ export interface PdfWorkerInput {
     width: number
     height: number
     margin: number
-    bitmap: ImageBitmap
-    ocrBitmap: ImageBitmap
+    bitmaps: ImageBitmap[]
     pageHeight: number
-    workspaceScale: number
     customWords: string
     debug: LogLevel
     charWhiteList: string
     autoPaginate: boolean
     ocrSettings?: OCRSettings
+    autoPaginationFlags: boolean[]
+    textNodes: ITextNode[][]
   }>
 }
 
@@ -70,8 +72,7 @@ export interface PdfWorkerOutput {
   readonly stageDescription?: string
   readonly metrics?: ProcessingMetrics
 
-  // Console forwarding properties
-  readonly level?: 'log' | 'debug' | 'info' | 'warn' | 'error'
+  readonly level?: (typeof overrides)[number]
   readonly args?: string[]
 }
 

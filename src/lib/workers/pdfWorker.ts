@@ -1,16 +1,16 @@
 import jsPDF from 'jspdf'
 import { blobToDataURL } from '../utils/blobToDataURL'
 import { chain } from '../utils/chain'
-import { drawOcrFromBlocks } from '../utils/drawOcrFromBlocks'
 import { getDimensions } from '../utils/getDimensions'
 import { getPaginatedCanvases } from '../utils/getPaginatedCanvases'
 import { transferBitmapToCanvas } from '../utils/transferBitmapToCanvas'
-import { createTesseractWorker } from './createTesseractWorker'
 import { forceGarbageCollection } from '../utils/forceGarbageCollection'
 import { cleanupCanvas } from '../utils/createCanvas'
 import { DebugLogger, type LogLevel, overrides } from '../DebugLogger'
-
-import { CONFIG, type OCRSettings } from '../config'
+import type { ITextNode } from '../utils/getTextNodes'
+import { drawTextLayerFromNodes } from '../utils/drawTextLayerFromNodes'
+import { sanitizeForTransfer } from './sanitizeForTransfer'
+import { CONFIG } from '../config'
 
 import {
   Progress,
@@ -18,22 +18,21 @@ import {
   type PdfWorkerOutput,
   type ProcessingMetrics
 } from './types'
-import type { Worker } from 'tesseract.js'
 
-const original = Object.fromEntries(
-  overrides.map((override) => [override, console[override].bind(console)])
-)
+/**
+ * Override console methods to direct messages to the main thread for proper logging.
+ */
 
 const wrapper =
-  (level: keyof typeof original) =>
+  (level: string) =>
   (...args: unknown[]) => {
     try {
       self.postMessage({
         type: 'console',
         level,
-        args: structuredClone(args)
+        args: args.map(sanitizeForTransfer)
       })
-    } catch {
+    } catch (error) {
       self.postMessage({
         type: 'console',
         level,
@@ -99,23 +98,19 @@ const reportProgress = (
 
 const processPage = async ({
   canvas,
-  ocrCanvas,
   doc,
-  worker,
   pageIndex,
   totalPages,
   margin,
-  ocrSettings,
+  textNodes,
   debug
 }: {
   canvas: OffscreenCanvas
-  ocrCanvas: OffscreenCanvas
   doc: jsPDF
-  worker: Worker
   pageIndex: number
   totalPages: number
   margin: number
-  ocrSettings: OCRSettings
+  textNodes: ITextNode[]
   debug: LogLevel
 }): Promise<ProcessingMetrics> => {
   const startTime = Date.now()
@@ -135,6 +130,7 @@ const processPage = async ({
   const page = pageIndex === 0 ? doc : doc.addPage()
 
   logger.debug('Converting canvas to blob')
+
   const [, imageData] = await chain(
     () => canvas.convertToBlob(CONVERT_TO_BLOB_OPTIONS),
     (blob) => blobToDataURL(blob, debug)
@@ -144,26 +140,14 @@ const processPage = async ({
   const { ratio } = getDimensions(canvas, { width, height })
 
   const pageDetails = {
-    pagwWidth: Math.round(width),
+    pageWidth: Math.round(width),
     pageHeight: Math.round(height),
     ratio: Math.round(ratio * 1000) / 1000
   }
 
   logger.info(`Processing page ${pageIndex + 1}/${totalPages}`, pageDetails)
-
-  logger.debug('Starting OCR processing for page')
-
-  await drawOcrFromBlocks({
-    doc: page,
-    canvas: ocrCanvas,
-    ratio,
-    worker,
-    ocrSettings,
-    debug,
-    logger
-  })
-
   logger.debug('Adding image to PDF page')
+
   page.addImage({
     imageData,
     format: CONFIG.PDF.IMAGE_FORMAT,
@@ -173,17 +157,33 @@ const processPage = async ({
     height
   })
 
-  // Add page number
-  page.setTextColor(CONFIG.PDF.PAGE_NUMBER_COLOR)
-  page.text(
-    `${page.getCurrentPageInfo().pageNumber}`,
-    width - margin / 2,
-    height - margin / 2,
-    {
-      align: 'center',
-      baseline: 'middle'
-    }
-  )
+  logger.debug('Drawing text layer from extracted text nodes')
+
+  drawTextLayerFromNodes({
+    doc: page,
+    textNodes,
+    canvasWidth: canvas.width,
+    canvasHeight: canvas.height,
+    ratio,
+    debug,
+    logger
+  })
+
+  const { pageNumber } = page.getCurrentPageInfo()
+
+  if (pageNumber !== 1) {
+    page.setTextColor(CONFIG.PDF.PAGE_NUMBER_COLOR)
+
+    page.text(
+      `${pageNumber}`,
+      width - (margin * ratio) / 2,
+      height - (margin * ratio) / 2,
+      {
+        align: 'center',
+        baseline: 'middle'
+      }
+    )
+  }
 
   const processingTime = Date.now() - startTime
 
@@ -194,13 +194,6 @@ const processPage = async ({
   }
 
   logger.info('Page processing complete', completionData)
-
-  const completionInfo = {
-    duration: `${processingTime}ms`,
-    ratio: Math.round(ratio * 1000) / 1000
-  }
-
-  logger.info(`Page ${pageIndex + 1} completed`, completionInfo)
 
   return {
     stage: 'PAGE_COMPLETE',
@@ -213,34 +206,44 @@ const processPage = async ({
 
 self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
   const startTime = Date.now()
+  const logger = DebugLogger.create('info')
 
   try {
     const { options } = data
 
-    reportProgress(0.1, { stage: 'Initializing worker...' })
-
-    const worker = await createTesseractWorker(
-      options.customWords,
-      options.charWhiteList,
-      'eng',
-      options.debug
-    )
+    reportProgress(0.1, { stage: 'Initializing...' })
 
     const doc = new jsPDF('p', 'px', [options.width, options.height], true)
-    const [canvas] = transferBitmapToCanvas(options.bitmap)
-    const [ocrCanvas] = transferBitmapToCanvas(options.ocrBitmap)
+
+    const canvases = options.bitmaps.map(
+      (bitmap) => transferBitmapToCanvas(bitmap, options.debug)[0]
+    )
 
     reportProgress(0.2, { stage: 'Preparing pages...' })
 
-    const cropped = await getPaginatedCanvases([canvas, ocrCanvas], {
-      pageHeight: options.pageHeight,
-      margin: options.margin * options.workspaceScale,
-      worker,
-      debug: options.debug
-    })
+    const allCropped = canvases
+      .map((canvas, index) => {
+        const pageTextNodes = options.textNodes[index] || []
 
-    const pages = options.autoPaginate ? cropped : [cropped[0]]
-    const totalPages = pages.length
+        if (!options.autoPaginationFlags[index]) {
+          return [[canvas, pageTextNodes]]
+        }
+
+        const { width: pdfWidth, height: pdfHeight } = doc.internal.pageSize
+
+        return getPaginatedCanvases(canvas, pageTextNodes, {
+          pageHeight: options.pageHeight,
+          margin: options.margin,
+          debug: options.debug,
+          pdfWidth,
+          pdfHeight
+        })
+      })
+      .flat() as [OffscreenCanvas, ITextNode[]][]
+
+    const totalPages = allCropped.length
+
+    logger.info('Pagination completed', allCropped)
 
     reportProgress(0.3, {
       pageNumber: 1,
@@ -250,23 +253,28 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
 
     const durations: number[] = []
 
-    for (const [pageIndex, [pageCanvas, pageOcrCanvas]] of pages.entries()) {
+    for (const [
+      pageIndex,
+      [pageCanvas, pageTextNodes]
+    ] of allCropped.entries()) {
       const pageStartTime = Date.now()
+
+      console.info('HI', {
+        pageCanvas,
+        pageTextNodes
+      })
 
       await processPage({
         canvas: pageCanvas,
-        ocrCanvas: pageOcrCanvas,
         doc,
-        worker,
         pageIndex,
         totalPages,
         margin: options.margin,
-        ocrSettings: options.ocrSettings ?? {},
+        textNodes: pageTextNodes,
         debug: options.debug
       })
 
       const pageDuration = Date.now() - pageStartTime
-
       durations.push(pageDuration)
 
       const pageProgress = 0.3 + (0.6 * (pageIndex + 1)) / totalPages
@@ -282,14 +290,13 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
       })
 
       cleanupCanvas(pageCanvas)
-      cleanupCanvas(pageOcrCanvas)
 
       if (pageIndex % CONFIG.PERFORMANCE.BATCH_SIZE === 0) {
         forceGarbageCollection()
       }
     }
 
-    await worker.terminate()
+    canvases.forEach(cleanupCanvas)
 
     reportProgress(0.95, {
       pageNumber: totalPages,
@@ -303,7 +310,6 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
     const result: PdfWorkerOutput = {
       type: Progress.Done,
       pdfBuffer: buffer,
-      timestamp: Date.now(),
       metrics: {
         stage: 'COMPLETE',
         progress: 1,
@@ -319,8 +325,7 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
 
     const errorResult: PdfWorkerOutput = {
       type: Progress.Error,
-      message: error instanceof Error ? error.message : String(error),
-      timestamp: Date.now()
+      message: error instanceof Error ? error.message : String(error)
     }
 
     postMessage(errorResult)

@@ -43,12 +43,6 @@ export const PAPER_DIMENSIONS: Record<
   LETTER: [2551, 3295]
 }
 
-export const OCR_PARAMS: Partial<WorkerParams> = {
-  preserve_interword_spaces: '0',
-  language_model_penalty_non_freq_dict_word: 'T',
-  language_model_penalty_non_dict_word: 'T'
-}
-
 export const CANVAS_CONTEXT_OPTIONS = {
   antialias: true,
   desynchronized: true

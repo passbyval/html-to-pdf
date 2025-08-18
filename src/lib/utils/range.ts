@@ -1,3 +1,3 @@
-export function range(n: number): number[] {
-  return [...Array(n).keys()]
+export function range(n: number, start = 0): number[] {
+  return [...Array(n).keys()].map((i) => i + start)
 }

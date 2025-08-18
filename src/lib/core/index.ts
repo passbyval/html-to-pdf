@@ -1,6 +1,6 @@
 import type { Options as ToCanvasOptions } from 'html-to-image/lib/types'
 import { CONFIG, type OCRSettings } from '../config'
-import { DebugLogger, type LogLevel, overrides } from '../DebugLogger'
+import { DebugLogger, type LogLevel } from '../DebugLogger'
 import PdfWorker from '../workers/pdfWorker?worker'
 import { css } from '../utils/css'
 import { traverse } from '../utils/traverse'
@@ -8,7 +8,6 @@ import { getTextNodes } from '../utils/getTextNodes'
 import { getUniqueCharsFromTextNodes } from '../utils/getUniqueCharsFromTextNodes'
 import { getUniqueWordsFromTextNodes } from '../utils/getUniqueWordsFromTextNodes'
 import { makeStyleProps } from '../utils/makeStyleProps'
-import { chain } from '../utils/chain'
 import { processOCRReplacements } from './processOCRReplacements'
 
 import {
@@ -43,6 +42,15 @@ export interface ICreateOptions {
   autoPaginate?: boolean
 }
 
+export const MARGIN_MAP: Record<IMargin, number> = Object.freeze({
+  Standard: DEFAULT_MARGIN,
+  Thin: DEFAULT_MARGIN / 2,
+  None: 0
+} as const)
+
+export const getMargin = (margin: IMargin = 'Standard', scale: number) =>
+  Math.round(typeof margin === 'number' ? margin : MARGIN_MAP[margin]) / scale
+
 export const getDimensions = ({
   format,
   margin,
@@ -53,19 +61,16 @@ export const getDimensions = ({
   const [WIDTH, HEIGHT] =
     PAPER_DIMENSIONS[format?.toUpperCase() as Uppercase<IPaperFormat>]
 
-  const MARGIN_MAP: Record<IMargin, number> = Object.freeze({
-    Standard: DEFAULT_MARGIN,
-    Thin: DEFAULT_MARGIN / 2,
-    None: 0
+  const scale = Math.round(workspaceScale * 2) / 2
+  const width = Math.round(WIDTH / scale)
+  const height = Math.round(HEIGHT / scale)
+  const padding = Math.round(getMargin(margin, scale))
+
+  return Object.freeze({
+    width,
+    height,
+    padding
   })
-
-  const width = WIDTH / workspaceScale
-  const height = HEIGHT / workspaceScale
-
-  const padding =
-    (typeof margin === 'number' ? margin : MARGIN_MAP[margin]) / workspaceScale
-
-  return Object.freeze({ width, height, padding })
 }
 
 const createErrorHandler = ({
@@ -83,7 +88,7 @@ const createErrorHandler = ({
 export const getDefaults = (options: ICreateOptions) => {
   const {
     format = 'Letter',
-    debug = false,
+    debug = 'warn',
     margin = DEFAULT_MARGIN,
     workspaceScale = 3.5,
     autoPaginate = true,
@@ -119,7 +124,7 @@ export const create = (
     onError
   } = getDefaults(options)
 
-  const htmlToImagePromise = import('html-to-image')
+  const htmlToImagePromise = import('../../html-to-image')
   const logger = DebugLogger.create(options.debug)
   const dimensions = getDimensions({ format, margin, workspaceScale })
 
@@ -151,35 +156,89 @@ export const create = (
       }
 
       const worker = new PdfWorker()
-
       const clonedNode = element.cloneNode(true) as HTMLElement
 
+      const { fixed, auto } = Array.from(
+        clonedNode.querySelectorAll('[data-html-to-pdf-page]')
+      ).reduce(
+        (acc, page) => {
+          if (!(page instanceof HTMLElement)) return acc
+
+          const autoPagination =
+            page.getAttribute('data-html-to-pdf-page') === 'true'
+
+          return {
+            fixed: autoPagination ? acc.fixed : [...acc.fixed, page],
+            auto: autoPagination ? [...acc.auto, page] : acc.auto
+          }
+        },
+        {
+          fixed: [] as HTMLElement[],
+          auto: [] as HTMLElement[]
+        }
+      )
+
       const { width, height, padding } = dimensions
-      const { scrollHeight } = element
 
-      const trueHeight = Math.max(height, scrollHeight)
+      const nodes: [HTMLElement, boolean][] = [...fixed, ...auto].map(
+        (node) => {
+          const { scrollHeight } = node
 
-      logger.debug('Preparing document layout', {
-        dimensions: `${Math.round(width)}x${Math.round(height)}`,
-        padding: Math.round(padding),
-        scrollHeight: Math.round(scrollHeight),
-        trueHeight: Math.round(trueHeight)
-      })
+          const autoPaginate = auto.includes(node)
+
+          const trueHeight = autoPaginate
+            ? Math.max(height, Math.round(scrollHeight))
+            : height
+
+          node.style.cssText = css`
+            width: ${width}px;
+            border: none;
+
+            /* Enhanced font rendering */
+            font-smooth: antialiased;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+
+            /* Better image rendering */
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+
+            /* Force hardware acceleration */
+            transform: translateZ(0);
+            will-change: transform;
+            backface-visibility: hidden;
+
+            /* Prevent blurry rendering */
+            -webkit-backface-visibility: hidden;
+            -webkit-perspective: 1000;
+            -webkit-transform: translate3d(0, 0, 0);
+          `
+
+          if (autoPaginate) {
+            node.style.cssText = css`
+              ${node.style.cssText}
+              min-height: ${trueHeight}px;
+              overflow: visible;
+              overflow-y: scroll;
+              overflow-x: hidden;
+            `
+          } else {
+            node.style.cssText = css`
+              ${node.style.cssText}
+              height: ${trueHeight}px;
+              overflow: hidden;
+              overflow-y: scroll;
+              overflow-x: hidden;
+            `
+          }
+
+          return [node, autoPaginate]
+        }
+      )
 
       clonedNode.style.cssText = css`
-        padding: ${padding}px;
-        min-height: ${trueHeight}px;
-        width: ${width}px;
-        margin: 0px;
-        border: none;
-        overflow: visible;
-        font-smooth: antialiased;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        transform: translateZ(0);
-        backface-visibility: hidden;
-        text-rendering: optimizeLegibility;
-        image-rendering: crisp-edges;
+        display: block;
       `
 
       document.body.appendChild(clonedNode)
@@ -189,104 +248,161 @@ export const create = (
       for (const node of traverse(clonedNode)) {
         const style = getComputedStyle(node)
 
-        const layoutAffectors = makeStyleProps([
-          'left',
-          'top',
-          'width',
-          'height',
-          'fontSize',
-          'lineHeight'
-        ])
+        makeStyleProps(['overflow', 'overflowX', 'overflowY']).forEach(
+          (property) => {
+            const value = style[property]
 
-        const overflow = makeStyleProps(['overflow', 'overflowX', 'overflowY'])
-
-        overflow.forEach((property) => {
-          const value = style[property]
-
-          if (typeof value === 'string' && ['scroll', 'auto'].includes(value)) {
-            node.style[property] = 'hidden'
+            if (
+              typeof value === 'string' &&
+              ['scroll', 'auto'].includes(value)
+            ) {
+              node.style[property] = 'hidden'
+            }
           }
-        })
+        )
 
-        layoutAffectors.forEach((property) => {
-          const value = style[property]
-          const num = parseFloat(value)
+        Object.getOwnPropertyNames(style).forEach((property) => {
+          const value = style[property as keyof CSSStyleDeclaration] as string
 
-          if (!isNaN(num)) {
-            node.style.setProperty(property, `${Math.round(num)}px`)
+          /* Reduce sub-pixels for crisper image */
+          if (typeof value === 'string' && value.endsWith('px')) {
+            const num = parseFloat(value)
+
+            if (!isNaN(num)) {
+              node.style.setProperty(
+                property,
+                `${Math.round(num * 1000) / 1000}px`
+              )
+            }
           }
         })
       }
 
-      const TO_CANVAS_OPTIONS: ToCanvasOptions = Object.freeze({
+      const [{ toCanvas }] = await Promise.all([
+        htmlToImagePromise,
+        document.fonts.ready,
+        ...Array.from(clonedNode.querySelectorAll('img')).map((img) => {
+          if (img.complete) return Promise.resolve()
+
+          return new Promise((resolve) => {
+            img.onload = resolve
+            img.onerror = resolve
+          })
+        })
+      ])
+
+      const TO_CANVAS_OPTIONS: ToCanvasOptions = {
         backgroundColor: 'white',
         quality: CONFIG.PDF.IMAGE_QUALITY,
-        pixelRatio: workspaceScale,
+        pixelRatio: Math.round(Math.min(workspaceScale * 2, 6) * 2) / 2,
         width,
         canvasWidth: width
-      })
+      }
 
       logger.debug('Converting HTML to canvas')
 
-      const [{ toCanvas }, canvas] = await chain(
-        async () => htmlToImagePromise,
-        async ({ toCanvas }) => toCanvas(clonedNode, TO_CANVAS_OPTIONS)
+      const mainCanvases = await Promise.all(
+        nodes.map(([node, autoPaginate]) =>
+          toCanvas(node, {
+            ...TO_CANVAS_OPTIONS,
+            height: autoPaginate ? undefined : height,
+            canvasHeight: autoPaginate ? undefined : height
+          })
+        )
       )
+
+      const autoPaginationFlags = nodes.map(([, autoPaginate]) => autoPaginate)
+
+      const { pixelRatio = 1 } = TO_CANVAS_OPTIONS
+
+      const textNodesPerCanvas = mainCanvases.map(([canvas, node]) => {
+        document.body.appendChild(node)
+
+        const nodeBounds = node.getBoundingClientRect()
+
+        const scaleX = canvas.width / pixelRatio / nodeBounds.width
+        const scaleY = canvas.height / pixelRatio / nodeBounds.height
+
+        const rawTextNodes = getTextNodes(node, 1, debug)
+
+        document.body.removeChild(node)
+
+        return rawTextNodes.map((textNode) => ({
+          ...textNode,
+          x: (textNode.x + padding) * scaleX * pixelRatio,
+          y: (textNode.y + padding) * scaleY * pixelRatio,
+          fontSize: textNode.fontSize * scaleY * pixelRatio,
+          width: textNode.width * scaleX * pixelRatio,
+          height: textNode.height * scaleY * pixelRatio
+        }))
+      })
+
+      const allTextNodes = textNodesPerCanvas.flat()
+      const charWhiteList = getUniqueCharsFromTextNodes(allTextNodes).join('')
 
       const userDefinedReplacements = processOCRReplacements(clonedNode, {
         logger
       })
 
-      const textNodes = getTextNodes(clonedNode, canvas)
-      const charWhiteList = getUniqueCharsFromTextNodes(textNodes).join('')
-
       const customWords = getUniqueWordsFromTextNodes(
-        textNodes,
+        allTextNodes,
         userDefinedReplacements
       ).join('\n')
 
       logger.info('Gathered document text information', {
-        textNodes: textNodes.length,
+        count: allTextNodes.length,
         uniqueChars: charWhiteList.length,
         customWords: customWords.split('\n').length,
-        userReplacements: userDefinedReplacements.length
+        userReplacements: userDefinedReplacements.length,
+        textNodes: allTextNodes
       })
-
-      const ocrCanvas = await toCanvas(clonedNode, TO_CANVAS_OPTIONS)
 
       document.body.removeChild(clonedNode)
 
-      const [bitmap, ocrBitmap] = await Promise.all(
-        [canvas, ocrCanvas].map((canvas) =>
+      const bitmaps = await Promise.all(
+        mainCanvases.map(([canvas]) =>
           createImageBitmap(canvas, {
-            resizeQuality: 'high'
+            resizeQuality: 'high',
+            colorSpaceConversion: 'none',
+            premultiplyAlpha: 'none'
           })
         )
       )
 
-      const input: PdfWorkerInput = Object.freeze({
-        options: Object.freeze({
+      const input: PdfWorkerInput = {
+        options: {
           height,
           width,
-          margin: padding,
-          pageHeight: height * workspaceScale,
-          workspaceScale,
-          bitmap,
-          ocrBitmap,
+          margin: padding * pixelRatio,
+          pageHeight: height * pixelRatio,
+          bitmaps,
+          autoPaginationFlags,
           autoPaginate,
           customWords,
           charWhiteList,
           debug,
-          ocrSettings: Object.freeze(ocrSettings)
-        })
-      })
+          ocrSettings: ocrSettings,
+          textNodes: textNodesPerCanvas
+        }
+      }
 
       logger.debug('Sending work to PDF worker')
 
-      worker.postMessage(input, [bitmap, ocrBitmap])
+      worker.postMessage(input, [...bitmaps])
 
       worker.onmessage = ({ data: message }: MessageEvent<PdfWorkerOutput>) => {
         onProgress?.(message)
+
+        if (message.type === 'console') {
+          const { level, args = [] } = message
+
+          const consoleMethod =
+            console[level as 'debug' | 'warn' | 'error' | 'info' | 'log']
+
+          if (typeof consoleMethod === 'function') {
+            consoleMethod.apply(console, args)
+          }
+        }
 
         switch (message.type) {
           case Progress.Done:
@@ -340,22 +456,6 @@ export const create = (
             return errorHandler(message.message || 'Unknown worker error')
         }
       }
-
-      worker.addEventListener(
-        'message',
-        (event: MessageEvent<PdfWorkerOutput>) => {
-          if (event.data.type === 'console') {
-            const { level, args = [] } = event.data
-
-            const consoleMethod =
-              console[level as 'debug' | 'warn' | 'error' | 'info' | 'log']
-
-            if (typeof consoleMethod === 'function') {
-              consoleMethod.apply(console, args)
-            }
-          }
-        }
-      )
     } catch (error) {
       if (error instanceof Error || typeof error === 'string') {
         errorHandler(error as Error)

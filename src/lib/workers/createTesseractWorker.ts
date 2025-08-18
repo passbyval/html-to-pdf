@@ -1,5 +1,10 @@
-import { createWorker, type WorkerParams, type InitOptions } from 'tesseract.js'
-import { OCR_PARAMS } from '../constants'
+import {
+  createWorker,
+  type WorkerParams,
+  type InitOptions,
+  PSM,
+  OEM
+} from 'tesseract.js'
 import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 const DATA_CLONE_ERROR_PREFIX = 'DataCloneError'
@@ -42,12 +47,7 @@ export const createTesseractWorker = async (
   logger.info('Preparing file system operations', {
     targetPath,
     wordsCount: wordsWithNewline.split('\n').filter(Boolean).length,
-    wordsPreview: (() => {
-      const halfway = wordsWithNewline.length / 2
-      const sample = wordsWithNewline.substring(halfway, halfway + 50)
-
-      return `${sample}${wordsWithNewline.length > 100 ? '...' : ''}`
-    })()
+    customWords: wordsWithNewline
   })
 
   logger.info('Creating tessdata directory')
@@ -87,12 +87,12 @@ export const createTesseractWorker = async (
   logger.debug('Reinitializing worker with language model')
   try {
     const settings: Partial<InitOptions> = {
-      load_system_dawg: '0',
-      load_freq_dawg: '0',
-      load_unambig_dawg: '0'
+      // load_system_dawg: '1',
+      // load_freq_dawg: '0',
+      // load_unambig_dawg: '0'
     }
 
-    await worker.reinitialize(lang, undefined, settings)
+    await worker.reinitialize(lang, OEM.LSTM_ONLY, settings)
 
     logger.debug(`Worker reinitialized with language: ${lang}`, {
       settings
@@ -105,20 +105,14 @@ export const createTesseractWorker = async (
   logger.info('Setting OCR parameters')
 
   const allParams: Partial<WorkerParams> = {
-    ...OCR_PARAMS,
-    tessedit_char_whitelist
+    preserve_interword_spaces: '0',
+    tessedit_char_whitelist,
+    user_defined_dpi: '600'
   }
 
   try {
     await worker.setParameters(allParams)
-
-    logger.debug('OCR parameters configured', {
-      totalParams: Object.keys(allParams).length,
-      charWhitelist:
-        tessedit_char_whitelist.substring(0, 50) +
-        (tessedit_char_whitelist.length > 50 ? '...' : ''),
-      customParams: Object.keys(OCR_PARAMS).length
-    })
+    logger.debug('OCR parameters configured', allParams)
   } catch (error) {
     logger.error('Failed to set OCR parameters', error)
     throw error

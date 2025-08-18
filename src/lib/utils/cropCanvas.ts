@@ -1,14 +1,14 @@
 import { DebugLogger, type LogLevel } from '../DebugLogger'
 
 export function cropCanvas(
-  sourceCanvases: OffscreenCanvas[],
+  canvas: OffscreenCanvas,
   {
     y,
     height,
     margin,
     isFirstPage,
     pageHeight,
-    debug = 'none'
+    debug
   }: {
     y: number
     height: number
@@ -17,54 +17,40 @@ export function cropCanvas(
     pageHeight: number
     debug?: LogLevel
   }
-): OffscreenCanvas[] {
+): OffscreenCanvas {
   const logger = DebugLogger.create(debug)
   const topMargin = isFirstPage ? 0 : margin
   const drawOffsetY = topMargin
 
-  logger.verbose('Cropping canvas section', {
-    sourceCanvases: sourceCanvases.length,
-    cropY: Math.round(y),
-    cropheight: Math.round(height),
-    pageHeight: Math.round(pageHeight),
-    margin: Math.round(margin),
-    isFirstPage,
-    topMargin: Math.round(topMargin)
-  })
+  const cv = new OffscreenCanvas(canvas.width, pageHeight)
 
-  return sourceCanvases.map((canvas, index) => {
-    const cv = new OffscreenCanvas(canvas.width, pageHeight)
+  const ctx = cv.getContext('2d', {
+    alpha: true,
+    desynchronized: true,
+    willReadFrequently: true,
+    colorType: 'float16',
+    colorSpace: 'display-p3'
+  })!
 
-    const ctx = cv.getContext('2d', {
-      desynchronized: true,
-      willReadFrequently: true,
-      colorType: 'float16'
-    })!
+  ctx.fillStyle = 'white'
+  ctx.filter = 'none'
+  ctx.fillRect(0, 0, cv.width, cv.height)
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
 
-    ctx.fillStyle = 'white'
-    ctx.fillRect(0, 0, cv.width, cv.height)
+  const drawableHeight = Math.min(height, canvas.height - y)
 
-    const drawableHeight = Math.min(height, canvas.height - y)
+  ctx.drawImage(
+    canvas,
+    0,
+    y,
+    canvas.width,
+    drawableHeight,
+    0,
+    drawOffsetY,
+    canvas.width,
+    drawableHeight
+  )
 
-    ctx.drawImage(
-      canvas,
-      0,
-      y,
-      canvas.width,
-      drawableHeight,
-      0,
-      drawOffsetY,
-      canvas.width,
-      drawableHeight
-    )
-
-    logger.verbose(`Canvas ${index + 1} cropped`, {
-      sourceSize: `${canvas.width}x${canvas.height}`,
-      targetSize: `${cv.width}x${cv.height}`,
-      drawableHeight: Math.round(drawableHeight),
-      offsetY: Math.round(drawOffsetY)
-    })
-
-    return cv
-  })
+  return cv
 }

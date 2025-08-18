@@ -168,12 +168,11 @@ export class DebugLogger {
       ] as const
     }
 
-    // Browser console styling with %c placeholders
     const styledMessage = `%c${prefixStr}%c ${baseLevelBadge} ${icon} ${message}`
 
     const styles = [
-      BROWSER_STYLES.BRIGHT + BROWSER_STYLES.MAGENTA, // prefix style
-      LEVEL_STYLES[level] // level style
+      BROWSER_STYLES.BRIGHT + BROWSER_STYLES.MAGENTA,
+      LEVEL_STYLES[level]
     ]
 
     return [styledMessage, styles, ...args] as const

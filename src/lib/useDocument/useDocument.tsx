@@ -9,6 +9,7 @@ import {
   type ReactNode
 } from 'react'
 import { Document } from '../components/Document'
+import { Page, type IPageProps } from '../components/Page'
 import { forceGarbageCollection } from '../utils/forceGarbageCollection'
 import {
   create as createPdf,
@@ -19,6 +20,7 @@ import {
 } from '../core'
 import { type ProcessingMetrics } from '../workers/types'
 import { pick } from '../utils/pick'
+import { PageHeader, type IPageHeaderProps } from '../components/PageHeader'
 
 export interface IUseDocumentOptions extends ICreateOptions {}
 
@@ -183,16 +185,37 @@ export const useDocument = (props: IUseDocumentOptions = {}) => {
     [state.dataUri, dimensions]
   )
 
-  const RefDocument = useMemo(
+  const RefPageHeader = memo(
+    ({ children, ...props }: Partial<IPageHeaderProps>) => (
+      <PageHeader
+        {...props}
+        workspaceScale={workspaceScale}
+        margin={dimensions.padding}
+      >
+        {children}
+      </PageHeader>
+    )
+  )
+
+  const RefPage = useMemo(
     () =>
-      memo(({ children }: PropsWithChildren) => (
-        <Document
+      memo(({ children, ...props }: Partial<IPageProps>) => (
+        <Page
           {...props}
-          ref={ref}
-          margin={dimensions.padding}
+          workspaceScale={workspaceScale}
           width={dimensions.width ?? 0}
           height={dimensions.height ?? 0}
         >
+          {children}
+        </Page>
+      )),
+    [props, dimensions]
+  )
+
+  const RefDocument = useMemo(
+    () =>
+      memo(({ children }: PropsWithChildren) => (
+        <Document {...props} ref={ref}>
           {children}
         </Document>
       )),
@@ -201,6 +224,8 @@ export const useDocument = (props: IUseDocumentOptions = {}) => {
 
   return Object.freeze({
     Document: RefDocument,
+    PageHeader: RefPageHeader,
+    Page: RefPage,
     Viewer,
     PreviewImage,
 
