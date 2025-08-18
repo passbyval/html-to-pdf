@@ -17,9 +17,8 @@ import { faker } from '@faker-js/faker'
 import { type ComponentProps, type PropsWithChildren } from 'react'
 import { AnimatedPercentage } from './components/AnimatedPercentage'
 import { Button } from './components/ui/button'
-import { Box } from './lib/components/Box'
-import { useDocument } from './lib/useDocument'
-import { times } from './utils/times'
+import { Box } from '@/lib/html-to-pdf/components/Box'
+import { useDocument } from '@/lib/html-to-pdf/useDocument'
 import { Separator } from './components/ui/separator'
 
 interface ITableData {

@@ -1,4 +1,4 @@
-import type { Options as ToCanvasOptions } from 'html-to-image/lib/types'
+import type { Options as ToCanvasOptions } from '@/lib/html-to-image/types'
 import { CONFIG, type OCRSettings } from '../config'
 import { DebugLogger, type LogLevel } from '../DebugLogger'
 import PdfWorker from '../workers/pdfWorker?worker'
