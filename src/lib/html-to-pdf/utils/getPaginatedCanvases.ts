@@ -61,21 +61,6 @@ export function getPaginatedCanvases(
         const pageBottom = y + height
         const isOnPage = nodeTop >= y && nodeBottom <= pageBottom + nodeHeight
 
-        if (text.includes('3486')) {
-          console.log('TTT', {
-            nodeTop,
-            nodeBottom,
-            nodeHeight,
-            text,
-            y,
-            height,
-            isOnPage,
-            pageHeight,
-            pageBottom,
-            margin
-          })
-        }
-
         if (!isOnPage) return acc
 
         return [
@@ -86,11 +71,6 @@ export function getPaginatedCanvases(
           }
         ]
       }, [] as ITextNode[])
-
-      console.info('HI', {
-        textNodes,
-        pageTextNodes
-      })
 
       return [...acc, [croppedCanvas, pageTextNodes]]
     },
