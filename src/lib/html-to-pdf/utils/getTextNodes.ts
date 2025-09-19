@@ -8,6 +8,7 @@ export interface ITextNode {
   y: number
   width: number
   height: number
+  textAlign: string
 }
 
 export function getTextNodes(
@@ -60,6 +61,8 @@ export function getTextNodes(
       return null
     }
 
+    const { textAlign } = style
+
     const fontSize = parseFloat(style.fontSize) || 0
     const letterSpacing = parseFloat(style.letterSpacing) || 0
 
@@ -73,7 +76,8 @@ export function getTextNodes(
       x: relativeX * workspaceScale,
       y: relativeY * workspaceScale,
       width: rect.width * workspaceScale,
-      height: rect.height * workspaceScale
+      height: rect.height * workspaceScale,
+      textAlign
     }
   }
 

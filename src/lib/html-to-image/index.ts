@@ -15,22 +15,25 @@ import {
 export async function toSvg<T extends HTMLElement>(
   node: T,
   options: Options = {}
-): Promise<string> {
+) {
   const { width, height } = getImageSize(node, options)
   const clonedNode = (await cloneNode(node, options, true)) as HTMLElement
   await embedWebFonts(clonedNode, options)
   await embedImages(clonedNode, options)
+
   applyStyle(clonedNode, options)
+
   const datauri = await nodeToDataURL(clonedNode, width, height)
-  return datauri
+
+  return [datauri, clonedNode] as const
 }
 
 export async function toCanvas<T extends HTMLElement>(
   node: T,
   options: Options = {}
-): Promise<HTMLCanvasElement> {
+) {
   const { width, height } = getImageSize(node, options)
-  const svg = await toSvg(node, options)
+  const [svg, clonedNode] = await toSvg(node, options)
   const img = await createImage(svg)
 
   const canvas = document.createElement('canvas')
@@ -55,7 +58,7 @@ export async function toCanvas<T extends HTMLElement>(
 
   context.drawImage(img, 0, 0, canvas.width, canvas.height)
 
-  return canvas
+  return [canvas, clonedNode] as const
 }
 
 export async function toPixelData<T extends HTMLElement>(

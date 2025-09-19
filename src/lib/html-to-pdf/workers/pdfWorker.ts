@@ -1,16 +1,16 @@
 import jsPDF from 'jspdf'
+import { CONFIG } from '../config'
+import { DebugLogger, overrides, type LogLevel } from '../DebugLogger'
 import { blobToDataURL } from '../utils/blobToDataURL'
 import { chain } from '../utils/chain'
+import { cleanupCanvas } from '../utils/createCanvas'
+import { drawTextLayerFromNodes } from '../utils/drawTextLayerFromNodes'
+import { forceGarbageCollection } from '../utils/forceGarbageCollection'
 import { getDimensions } from '../utils/getDimensions'
 import { getPaginatedCanvases } from '../utils/getPaginatedCanvases'
-import { transferBitmapToCanvas } from '../utils/transferBitmapToCanvas'
-import { forceGarbageCollection } from '../utils/forceGarbageCollection'
-import { cleanupCanvas } from '../utils/createCanvas'
-import { DebugLogger, type LogLevel, overrides } from '../DebugLogger'
 import type { ITextNode } from '../utils/getTextNodes'
-import { drawTextLayerFromNodes } from '../utils/drawTextLayerFromNodes'
+import { transferBitmapToCanvas } from '../utils/transferBitmapToCanvas'
 import { sanitizeForTransfer } from './sanitizeForTransfer'
-import { CONFIG } from '../config'
 
 import {
   Progress,
@@ -140,9 +140,9 @@ const processPage = async ({
   const { ratio } = getDimensions(canvas, { width, height })
 
   const pageDetails = {
-    pageWidth: Math.round(width),
-    pageHeight: Math.round(height),
-    ratio: Math.round(ratio * 1000) / 1000
+    pageWidth: width,
+    pageHeight: height,
+    ratio: (ratio * 1000) / 1000
   }
 
   logger.info(`Processing page ${pageIndex + 1}/${totalPages}`, pageDetails)
@@ -258,11 +258,6 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
       [pageCanvas, pageTextNodes]
     ] of allCropped.entries()) {
       const pageStartTime = Date.now()
-
-      console.info('HI', {
-        pageCanvas,
-        pageTextNodes
-      })
 
       await processPage({
         canvas: pageCanvas,

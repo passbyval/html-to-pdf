@@ -84,8 +84,8 @@ export const processOCRReplacements = (
 
     logger.verbose('OCR replacement processed', {
       value,
-      fontSize: Math.round(fontSize),
-      dimensions: `${Math.round(width)}x${Math.round(height)}`
+      fontSize: fontSize,
+      dimensions: `${width}x${height}`
     })
 
     return acc.includes(value) ? acc : Object.freeze([...acc, value])

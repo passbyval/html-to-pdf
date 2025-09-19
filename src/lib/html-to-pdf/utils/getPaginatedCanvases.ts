@@ -1,6 +1,5 @@
-import { cropCanvas } from './cropCanvas'
 import { DebugLogger, type LogLevel } from '../DebugLogger'
-import { getDimensions } from './getDimensions'
+import { cropCanvas } from './cropCanvas'
 import type { ITextNode } from './getTextNodes'
 import { range } from './range'
 
@@ -21,8 +20,8 @@ export function getPaginatedCanvases(
     pdfHeight: number
   }
 ): [OffscreenCanvas, ITextNode[]][] {
-  const startTime = Date.now()
   const logger = DebugLogger.create(debug)
+
   const { height: totalHeight } = canvas
   const firstPageHeight = pageHeight - margin
   const subsequentPageHeight = pageHeight - margin * 2
@@ -30,7 +29,7 @@ export function getPaginatedCanvases(
   const pageCount =
     1 + Math.ceil((totalHeight - firstPageHeight) / subsequentPageHeight)
 
-  console.info('Calculated page count', {
+  logger.info('Calculated page count', {
     pageCount,
     totalHeight,
     firstPageHeight,
@@ -44,67 +43,53 @@ export function getPaginatedCanvases(
 
       const y = isFirstPage
         ? 0
-        : firstPageHeight + subsequentPageHeight * (pageNumber - 1) + 1
-
-      console.log(`PAGE ${pageNumber + 1} CROPPING DEBUG:`, {
-        pageNumber: pageNumber + 1,
-        cropStartY: y,
-        cropHeight: height,
-        isFirstPage,
-        totalCanvasHeight: totalHeight
-      })
+        : firstPageHeight + subsequentPageHeight * (pageNumber - 1)
 
       const croppedCanvas = cropCanvas(canvas, {
         y,
         height,
         margin,
         isFirstPage,
-        pageHeight,
-        debug
+        isLastPage: pageNumber + 1 === pageCount,
+        pageHeight
       })
 
-      // Calculate ratio for THIS specific cropped canvas
-      const { ratio } = getDimensions(croppedCanvas, {
-        width: pdfWidth,
-        height: pdfHeight
-      })
+      const pageTextNodes = textNodes.reduce((acc, node) => {
+        const { y: nodeTop, height: nodeHeight, text } = node
 
-      const pageTextNodes = textNodes
-        .filter(({ y: top, height: h }) => {
-          const nodeTop = top
-          const nodeBottom = nodeTop + h
-          const pageBottom = y + height
+        const nodeBottom = nodeTop + nodeHeight
+        const pageBottom = y + height
+        const isOnPage = nodeTop >= y && nodeBottom <= pageBottom + nodeHeight
 
-          return !(nodeBottom <= y || nodeTop >= pageBottom)
-        })
-        .map((node, textIndex) => {
-          const originalY = node.y
-          const adjustedY = node.y - y + (isFirstPage ? 0 : margin * ratio)
+        if (text.includes('3486')) {
+          console.log('TTT', {
+            nodeTop,
+            nodeBottom,
+            nodeHeight,
+            text,
+            y,
+            height,
+            isOnPage,
+            pageHeight,
+            pageBottom,
+            margin
+          })
+        }
 
-          if (textIndex < 3) {
-            console.log(`  Text ${textIndex}: "${node.text.slice(0, 15)}"`, {
-              originalY,
-              cropStartY: y,
-              marginAdjustment: isFirstPage ? 0 : margin * ratio,
-              adjustedY,
-              shouldBeWithinCanvas: adjustedY < croppedCanvas.height,
-              ratio
-            })
-          }
+        if (!isOnPage) return acc
 
-          return {
+        return [
+          ...acc,
+          {
             ...node,
-            y: adjustedY
+            y: nodeTop - y + (isFirstPage ? 0 : margin)
           }
-        })
-        .sort((a, b) => a.y - b.y)
+        ]
+      }, [] as ITextNode[])
 
-      console.log(`PAGE ${pageNumber + 1} FINAL:`, {
-        croppedCanvasSize: `${croppedCanvas.width}x${croppedCanvas.height}`,
-        ratio: ratio.toFixed(3),
-        textNodesCount: pageTextNodes.length,
-        firstTextY: pageTextNodes[0]?.y,
-        lastTextY: pageTextNodes[pageTextNodes.length - 1]?.y
+      console.info('HI', {
+        textNodes,
+        pageTextNodes
       })
 
       return [...acc, [croppedCanvas, pageTextNodes]]

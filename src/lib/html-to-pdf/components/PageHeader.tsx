@@ -1,10 +1,10 @@
 import {
-  type PropsWithChildren,
+  type CSSProperties,
   type ElementType,
-  type CSSProperties
+  type PropsWithChildren
 } from 'react'
-import { getMargin } from '../core'
 import type { IMargin } from '../constants'
+import { getMargin } from '../core'
 
 interface IPageHeaderProps extends PropsWithChildren {
   as?: ElementType

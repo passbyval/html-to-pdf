@@ -1,19 +1,19 @@
 import type { Options as ToCanvasOptions } from '@/lib/html-to-image/types'
 import { CONFIG, type OCRSettings } from '../config'
 import { DebugLogger, type LogLevel } from '../DebugLogger'
-import PdfWorker from '../workers/pdfWorker?worker'
 import { css } from '../utils/css'
-import { traverse } from '../utils/traverse'
 import { getTextNodes } from '../utils/getTextNodes'
 import { getUniqueCharsFromTextNodes } from '../utils/getUniqueCharsFromTextNodes'
 import { getUniqueWordsFromTextNodes } from '../utils/getUniqueWordsFromTextNodes'
 import { makeStyleProps } from '../utils/makeStyleProps'
+import { traverse } from '../utils/traverse'
+import PdfWorker from '../workers/pdfWorker?worker'
 import { processOCRReplacements } from './processOCRReplacements'
 
 import {
   Progress,
-  type PdfWorkerInput,
   type IDownloadOptions,
+  type PdfWorkerInput,
   type PdfWorkerOutput,
   type ProcessingMetrics
 } from '../workers/types'
@@ -49,7 +49,7 @@ export const MARGIN_MAP: Record<IMargin, number> = Object.freeze({
 } as const)
 
 export const getMargin = (margin: IMargin = 'Standard', scale: number) =>
-  Math.round(typeof margin === 'number' ? margin : MARGIN_MAP[margin]) / scale
+  (typeof margin === 'number' ? margin : MARGIN_MAP[margin]) / scale
 
 export const getDimensions = ({
   format,
@@ -61,10 +61,10 @@ export const getDimensions = ({
   const [WIDTH, HEIGHT] =
     PAPER_DIMENSIONS[format?.toUpperCase() as Uppercase<IPaperFormat>]
 
-  const scale = Math.round(workspaceScale * 2) / 2
-  const width = Math.round(WIDTH / scale)
-  const height = Math.round(HEIGHT / scale)
-  const padding = Math.round(getMargin(margin, scale))
+  const scale = (workspaceScale * 2) / 2
+  const width = WIDTH / scale
+  const height = HEIGHT / scale
+  const padding = getMargin(margin, scale)
 
   return Object.freeze({
     width,
@@ -158,6 +158,8 @@ export const create = (
       const worker = new PdfWorker()
       const clonedNode = element.cloneNode(true) as HTMLElement
 
+      document.body.appendChild(clonedNode)
+
       const { fixed, auto } = Array.from(
         clonedNode.querySelectorAll('[data-html-to-pdf-page]')
       ).reduce(
@@ -182,12 +184,16 @@ export const create = (
 
       const nodes: [HTMLElement, boolean][] = [...fixed, ...auto].map(
         (node) => {
-          const { scrollHeight } = node
-
           const autoPaginate = auto.includes(node)
 
+          if (autoPaginate) {
+            node.style.height = 'unset'
+          }
+
+          const { scrollHeight } = node
+
           const trueHeight = autoPaginate
-            ? Math.max(height, Math.round(scrollHeight))
+            ? Math.max(height, scrollHeight)
             : height
 
           node.style.cssText = css`
@@ -241,8 +247,6 @@ export const create = (
         display: block;
       `
 
-      document.body.appendChild(clonedNode)
-
       logger.debug('Processing DOM nodes for layout fixes')
 
       for (const node of traverse(clonedNode)) {
@@ -260,22 +264,6 @@ export const create = (
             }
           }
         )
-
-        Object.getOwnPropertyNames(style).forEach((property) => {
-          const value = style[property as keyof CSSStyleDeclaration] as string
-
-          /* Reduce sub-pixels for crisper image */
-          if (typeof value === 'string' && value.endsWith('px')) {
-            const num = parseFloat(value)
-
-            if (!isNaN(num)) {
-              node.style.setProperty(
-                property,
-                `${Math.round(num * 1000) / 1000}px`
-              )
-            }
-          }
-        })
       }
 
       const [{ toCanvas }] = await Promise.all([
@@ -294,7 +282,7 @@ export const create = (
       const TO_CANVAS_OPTIONS: ToCanvasOptions = {
         backgroundColor: 'white',
         quality: CONFIG.PDF.IMAGE_QUALITY,
-        pixelRatio: Math.round(Math.min(workspaceScale * 2, 6) * 2) / 2,
+        pixelRatio: workspaceScale,
         width,
         canvasWidth: width
       }
@@ -310,6 +298,17 @@ export const create = (
           })
         )
       )
+
+      console.log({ mainCanvases }, mainCanvases[1][0].height)
+
+      mainCanvases[1][0].toBlob((b) => {
+        if (!b) return
+        const url = URL.createObjectURL(b)
+        window.open(url)
+        URL.revokeObjectURL(url)
+      })
+
+      throw new Error('')
 
       const autoPaginationFlags = nodes.map(([, autoPaginate]) => autoPaginate)
 
@@ -329,8 +328,8 @@ export const create = (
 
         return rawTextNodes.map((textNode) => ({
           ...textNode,
-          x: (textNode.x + padding) * scaleX * pixelRatio,
-          y: (textNode.y + padding) * scaleY * pixelRatio,
+          x: textNode.x * scaleX * pixelRatio,
+          y: textNode.y * scaleY * pixelRatio,
           fontSize: textNode.fontSize * scaleY * pixelRatio,
           width: textNode.width * scaleX * pixelRatio,
           height: textNode.height * scaleY * pixelRatio
@@ -465,4 +464,4 @@ export const create = (
   })
 }
 
-export { type PdfWorkerOutput, Progress }
+export { Progress, type PdfWorkerOutput }

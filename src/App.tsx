@@ -36,7 +36,7 @@ const data: ITableData[] = [
     accountNumber: '16936810',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '3724-555414-18162',
-    currencySymbol: '€',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -44,7 +44,7 @@ const data: ITableData[] = [
     accountNumber: '95019228',
     creditCardIssuer: 'discover',
     creditCardNumber: '6011-3035-4477-7487',
-    currencySymbol: '﷼',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -52,7 +52,7 @@ const data: ITableData[] = [
     accountNumber: '52105759',
     creditCardIssuer: 'diners_club',
     creditCardNumber: '3482-112621-20946',
-    currencySymbol: 'Db',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -60,7 +60,7 @@ const data: ITableData[] = [
     accountNumber: '12077435',
     creditCardIssuer: 'visa',
     creditCardNumber: '2226-0801-0043-7116',
-    currencySymbol: '؋',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -68,7 +68,7 @@ const data: ITableData[] = [
     accountNumber: '45302457',
     creditCardIssuer: 'diners_club',
     creditCardNumber: '6011-4984-4778-0453',
-    currencySymbol: '₡',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -76,7 +76,7 @@ const data: ITableData[] = [
     accountNumber: '15965577',
     creditCardIssuer: 'american_express',
     creditCardNumber: '3528-7099-8687-7614',
-    currencySymbol: '؋',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -92,7 +92,7 @@ const data: ITableData[] = [
     accountNumber: '27840008',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '5495-4631-6743-9562',
-    currencySymbol: '£',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -100,7 +100,7 @@ const data: ITableData[] = [
     accountNumber: '01240482',
     creditCardIssuer: 'american_express',
     creditCardNumber: '6475-4897-7095-5423',
-    currencySymbol: 'Rp',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -108,7 +108,7 @@ const data: ITableData[] = [
     accountNumber: '18789591',
     creditCardIssuer: 'diners_club',
     creditCardNumber: '4976341494521',
-    currencySymbol: 'S/.',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -116,7 +116,7 @@ const data: ITableData[] = [
     accountNumber: '16594193',
     creditCardIssuer: 'american_express',
     creditCardNumber: '3582-0450-2764-0650',
-    currencySymbol: 'Php',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -124,7 +124,7 @@ const data: ITableData[] = [
     accountNumber: '00378053',
     creditCardIssuer: 'diners_club',
     creditCardNumber: '3733-183786-30169',
-    currencySymbol: 'Q',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -132,7 +132,7 @@ const data: ITableData[] = [
     accountNumber: '62430182',
     creditCardIssuer: 'discover',
     creditCardNumber: '3528-2920-8932-7076',
-    currencySymbol: '₨',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -140,7 +140,7 @@ const data: ITableData[] = [
     accountNumber: '01149944',
     creditCardIssuer: 'diners_club',
     creditCardNumber: '3533-7790-1971-3147',
-    currencySymbol: 'ден',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -156,7 +156,7 @@ const data: ITableData[] = [
     accountNumber: '26058912',
     creditCardIssuer: 'visa',
     creditCardNumber: '3574-3195-3911-9671',
-    currencySymbol: 'S',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -164,7 +164,7 @@ const data: ITableData[] = [
     accountNumber: '20066594',
     creditCardIssuer: 'american_express',
     creditCardNumber: '6473-2380-5522-0660',
-    currencySymbol: 'лв',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -172,7 +172,7 @@ const data: ITableData[] = [
     accountNumber: '83094826',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '3529-1573-8153-9810',
-    currencySymbol: 'Php',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -180,7 +180,7 @@ const data: ITableData[] = [
     accountNumber: '21602437',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '4982-4707-3011-4708',
-    currencySymbol: 'R',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -188,7 +188,7 @@ const data: ITableData[] = [
     accountNumber: '31399783',
     creditCardIssuer: 'jcb',
     creditCardNumber: '4954285953042',
-    currencySymbol: '£',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -204,7 +204,7 @@ const data: ITableData[] = [
     accountNumber: '93652194',
     creditCardIssuer: 'discover',
     creditCardNumber: '6011-4036-4517-3931',
-    currencySymbol: 'RD$',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -212,7 +212,7 @@ const data: ITableData[] = [
     accountNumber: '19579854',
     creditCardIssuer: 'jcb',
     creditCardNumber: '5389-3512-4499-3447',
-    currencySymbol: '៛',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -220,7 +220,7 @@ const data: ITableData[] = [
     accountNumber: '04465485',
     creditCardIssuer: 'jcb',
     creditCardNumber: '4772989168331',
-    currencySymbol: '﷼',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -228,7 +228,7 @@ const data: ITableData[] = [
     accountNumber: '10115504',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '3529-2430-7554-7838',
-    currencySymbol: 'P',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -236,7 +236,7 @@ const data: ITableData[] = [
     accountNumber: '24066571',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '3529-5652-8684-1877',
-    currencySymbol: 'лв',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -244,7 +244,7 @@ const data: ITableData[] = [
     accountNumber: '70460323',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '5470-3576-8403-7272',
-    currencySymbol: 'S/.',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -252,7 +252,7 @@ const data: ITableData[] = [
     accountNumber: '47426451',
     creditCardIssuer: 'visa',
     creditCardNumber: '5472-5937-4161-5597',
-    currencySymbol: 'ƒ',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -260,7 +260,7 @@ const data: ITableData[] = [
     accountNumber: '20707928',
     creditCardIssuer: 'jcb',
     creditCardNumber: '4484-9089-0902-4136',
-    currencySymbol: 'Kč',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -268,7 +268,7 @@ const data: ITableData[] = [
     accountNumber: '59972465',
     creditCardIssuer: 'discover',
     creditCardNumber: '3587-9879-3608-8379',
-    currencySymbol: 'RM',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -276,7 +276,7 @@ const data: ITableData[] = [
     accountNumber: '93284562',
     creditCardIssuer: 'american_express',
     creditCardNumber: '6011-3789-0019-9294',
-    currencySymbol: 'Bs',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -284,7 +284,7 @@ const data: ITableData[] = [
     accountNumber: '56941798',
     creditCardIssuer: 'jcb',
     creditCardNumber: '3529-3150-1644-7391',
-    currencySymbol: '﷼',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -292,7 +292,7 @@ const data: ITableData[] = [
     accountNumber: '01577033',
     creditCardIssuer: 'discover',
     creditCardNumber: '3715-112985-10451',
-    currencySymbol: 'Q',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -300,7 +300,7 @@ const data: ITableData[] = [
     accountNumber: '38788336',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '3486-827413-06548',
-    currencySymbol: '₨',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -308,7 +308,7 @@ const data: ITableData[] = [
     accountNumber: '74800346',
     creditCardIssuer: 'discover',
     creditCardNumber: '6011-0091-8162-2718',
-    currencySymbol: '₺',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -316,7 +316,7 @@ const data: ITableData[] = [
     accountNumber: '98396794',
     creditCardIssuer: 'diners_club',
     creditCardNumber: '3461-762610-17009',
-    currencySymbol: '¥',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -324,7 +324,7 @@ const data: ITableData[] = [
     accountNumber: '26379283',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '3785-772495-04482',
-    currencySymbol: '﷼',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -332,7 +332,7 @@ const data: ITableData[] = [
     accountNumber: '71016133',
     creditCardIssuer: 'discover',
     creditCardNumber: '2698-9581-4166-3486',
-    currencySymbol: '₨',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -340,7 +340,7 @@ const data: ITableData[] = [
     accountNumber: '49455973',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '6522-6869-1305-0649',
-    currencySymbol: '₦',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -348,7 +348,7 @@ const data: ITableData[] = [
     accountNumber: '37139093',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '3529-9272-7810-9954',
-    currencySymbol: '﷼',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -356,7 +356,7 @@ const data: ITableData[] = [
     accountNumber: '24671010',
     creditCardIssuer: 'diners_club',
     creditCardNumber: '4865-3921-7567-5286',
-    currencySymbol: 'kr',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -364,7 +364,7 @@ const data: ITableData[] = [
     accountNumber: '14348723',
     creditCardIssuer: 'discover',
     creditCardNumber: '5472-2601-4438-1041',
-    currencySymbol: '₡',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -372,7 +372,7 @@ const data: ITableData[] = [
     accountNumber: '97939225',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '3492-135720-18801',
-    currencySymbol: '₨',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -380,7 +380,7 @@ const data: ITableData[] = [
     accountNumber: '06595861',
     creditCardIssuer: 'jcb',
     creditCardNumber: '4487859440104',
-    currencySymbol: '﷼',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -388,7 +388,7 @@ const data: ITableData[] = [
     accountNumber: '04520144',
     creditCardIssuer: 'discover',
     creditCardNumber: '3728-206135-96650',
-    currencySymbol: 'lei',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -396,7 +396,7 @@ const data: ITableData[] = [
     accountNumber: '29199041',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '2377-0225-5873-7784',
-    currencySymbol: 'kr',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -404,7 +404,7 @@ const data: ITableData[] = [
     accountNumber: '58642604',
     creditCardIssuer: 'american_express',
     creditCardNumber: '4618-8991-5698-4289',
-    currencySymbol: '₨',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -412,7 +412,7 @@ const data: ITableData[] = [
     accountNumber: '51642726',
     creditCardIssuer: 'diners_club',
     creditCardNumber: '3429-728701-07023',
-    currencySymbol: '₺',
+    currencySymbol: '$',
     paid: 'Paid'
   },
   {
@@ -420,7 +420,7 @@ const data: ITableData[] = [
     accountNumber: '31519238',
     creditCardIssuer: 'mastercard',
     creditCardNumber: '5559-2829-2717-1981',
-    currencySymbol: '₨',
+    currencySymbol: '$',
     paid: 'Unpaid'
   },
   {
@@ -428,7 +428,7 @@ const data: ITableData[] = [
     accountNumber: '31690935',
     creditCardIssuer: 'visa',
     creditCardNumber: '3670-354364-4964',
-    currencySymbol: '﷼',
+    currencySymbol: '$',
     paid: 'Paid'
   }
 ]

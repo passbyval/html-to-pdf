@@ -1,5 +1,3 @@
-import { DebugLogger, type LogLevel } from '../DebugLogger'
-
 export function cropCanvas(
   canvas: OffscreenCanvas,
   {
@@ -7,18 +5,17 @@ export function cropCanvas(
     height,
     margin,
     isFirstPage,
-    pageHeight,
-    debug
+    isLastPage,
+    pageHeight
   }: {
     y: number
     height: number
     margin: number
     isFirstPage: boolean
+    isLastPage: boolean
     pageHeight: number
-    debug?: LogLevel
   }
 ): OffscreenCanvas {
-  const logger = DebugLogger.create(debug)
   const topMargin = isFirstPage ? 0 : margin
   const drawOffsetY = topMargin
 
