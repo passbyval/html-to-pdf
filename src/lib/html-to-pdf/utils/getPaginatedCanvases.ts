@@ -9,15 +9,11 @@ export function getPaginatedCanvases(
   {
     pageHeight,
     margin,
-    debug,
-    pdfWidth,
-    pdfHeight
+    debug
   }: {
     pageHeight: number
     margin: number
     debug?: LogLevel
-    pdfWidth: number
-    pdfHeight: number
   }
 ): [OffscreenCanvas, ITextNode[]][] {
   const logger = DebugLogger.create(debug)
@@ -55,7 +51,7 @@ export function getPaginatedCanvases(
       })
 
       const pageTextNodes = textNodes.reduce((acc, node) => {
-        const { y: nodeTop, height: nodeHeight, text } = node
+        const { y: nodeTop, height: nodeHeight } = node
 
         const nodeBottom = nodeTop + nodeHeight
         const pageBottom = y + height

@@ -229,14 +229,10 @@ self.onmessage = async ({ data }: MessageEvent<PdfWorkerInput>) => {
           return [[canvas, pageTextNodes]]
         }
 
-        const { width: pdfWidth, height: pdfHeight } = doc.internal.pageSize
-
         return getPaginatedCanvases(canvas, pageTextNodes, {
           pageHeight: options.pageHeight,
           margin: options.margin,
-          debug: options.debug,
-          pdfWidth,
-          pdfHeight
+          debug: options.debug
         })
       })
       .flat() as [OffscreenCanvas, ITextNode[]][]

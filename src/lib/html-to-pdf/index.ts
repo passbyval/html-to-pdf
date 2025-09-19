@@ -1,0 +1,6 @@
+export { Document } from './components/Document'
+export { OcrHidden } from './components/OcrHidden'
+export { Page } from './components/Page'
+export { PageHeader } from './components/PageHeader'
+export { create } from './core'
+export { useDocument } from './useDocument'

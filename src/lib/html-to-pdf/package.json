@@ -1,0 +1,17 @@
+{
+  "name": "@passbyval/html-to-pdf",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "jspdf": "^3.0.1"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-dom": "*"
+  },
+  "exports": {
+    ".": {
+      "import": "./index.ts"
+    }
+  }
+}
