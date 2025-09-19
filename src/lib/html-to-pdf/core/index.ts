@@ -299,17 +299,6 @@ export const create = (
         )
       )
 
-      console.log({ mainCanvases }, mainCanvases[1][0].height)
-
-      mainCanvases[1][0].toBlob((b) => {
-        if (!b) return
-        const url = URL.createObjectURL(b)
-        window.open(url)
-        URL.revokeObjectURL(url)
-      })
-
-      throw new Error('')
-
       const autoPaginationFlags = nodes.map(([, autoPaginate]) => autoPaginate)
 
       const { pixelRatio = 1 } = TO_CANVAS_OPTIONS
